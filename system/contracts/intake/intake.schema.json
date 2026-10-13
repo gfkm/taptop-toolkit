@@ -1,0 +1,14 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "Taptop Toolkit source intake",
+  "type": "object",
+  "required": ["schemaVersion", "sourceType"],
+  "properties": {
+    "schemaVersion": { "const": 1 },
+    "sourceType": { "enum": ["figma-with-kit", "figma-without-kit", "ai-generated", "html"] },
+    "figma": { "type": "object" },
+    "foundationStrategy": { "const": "extract-from-screens" },
+    "html": { "type": "object" },
+    "ai": { "type": "object" }
+  }
+}

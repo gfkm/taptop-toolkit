@@ -1,0 +1,138 @@
+{
+  "description": "Source snapshot hashes; no runtime link to original project",
+  "files": [
+    {
+      "source": "taptop-export/lib/import-package-preflight.js",
+      "sha256": "66509656700f4ef57ef8def675350289f90cec1cab0f3819329d39c74caf24a8",
+      "destination": "lib/import-package-preflight.js",
+      "adapted": false,
+      "extractedSha256": "66509656700f4ef57ef8def675350289f90cec1cab0f3819329d39c74caf24a8"
+    },
+    {
+      "source": "taptop-export/lib/import-sync-contract.js",
+      "sha256": "a3faa00328709aa10883e0f4fbf702cd3a3dec7e19708e8f039c5531b660a5d4",
+      "destination": "lib/import-sync-contract.js",
+      "adapted": false,
+      "extractedSha256": "a3faa00328709aa10883e0f4fbf702cd3a3dec7e19708e8f039c5531b660a5d4"
+    },
+    {
+      "source": "taptop-export/lib/validate-export.js",
+      "sha256": "02589c04494b6cce4c9231314e3a161eb51c244c8546c5fb2ac4949e61b68a6e",
+      "destination": "lib/validate-export.js",
+      "adapted": true,
+      "extractedSha256": "119574716d621b6988b929117ee69e448a0e770d35a2757d8a151a6727fb8782"
+    },
+    {
+      "source": "taptop-export/lib/runtime-shape.js",
+      "sha256": "dfbb220ee5c17d95d6cfcb78b980652d618c58503edd0f43f80fce7d8bdee508",
+      "destination": "lib/runtime-shape.js",
+      "adapted": false,
+      "extractedSha256": "dfbb220ee5c17d95d6cfcb78b980652d618c58503edd0f43f80fce7d8bdee508"
+    },
+    {
+      "source": "taptop-export/lib/css-rules.js",
+      "sha256": "1b711dedfc1717ef829ec57ed5adb6f5fc9cc59a482019f49b0b8434911e51a1",
+      "destination": "lib/css-rules.js",
+      "adapted": false,
+      "extractedSha256": "1b711dedfc1717ef829ec57ed5adb6f5fc9cc59a482019f49b0b8434911e51a1"
+    },
+    {
+      "source": "taptop-export/lib/css-collect.js",
+      "sha256": "baebf734256be6b2d6d671c74b94eb2638a91481f9221df3905f55853eb2787d",
+      "destination": "lib/css-collect.js",
+      "adapted": true,
+      "extractedSha256": "0834a69c13def62aeb7607d65f1623a828b316124646dfc9be4de889e47cf7d3"
+    },
+    {
+      "source": "taptop-export/lib/validate-tree.js",
+      "sha256": "f15c3b7ea19be39f56ca3d94463516a992e6c82347cf9f9d445accf1b88c3853",
+      "destination": "lib/validate-tree.js",
+      "adapted": false,
+      "extractedSha256": "f15c3b7ea19be39f56ca3d94463516a992e6c82347cf9f9d445accf1b88c3853"
+    },
+    {
+      "source": "taptop-export/lib/build-import-sync-package.js",
+      "sha256": "b6150c8db5fb646dd05638d80139449b946740f7a095464a3e1eb075c64a140d",
+      "destination": "lib/build-import-sync-package.js",
+      "adapted": false,
+      "extractedSha256": "b6150c8db5fb646dd05638d80139449b946740f7a095464a3e1eb075c64a140d"
+    },
+    {
+      "source": "taptop-export/lib/build-compiler-identity-manifest.js",
+      "sha256": "4e938a9eef76a2746eba3d1ad653508cd1ee88fac6ee01432a9b878d976e4cad",
+      "destination": "lib/build-compiler-identity-manifest.js",
+      "adapted": true,
+      "extractedSha256": "7a4afbdef4ddd3cffdaee20054c717228dc9bda47884eadd4a7a0ac806b4ff4a"
+    },
+    {
+      "source": "taptop-export/lib/compiler/ir-to-taptop.js",
+      "sha256": "4db968ffcab541d48be2cbf561fda2be7edd95fc3e7c7778c80e3abefa9b960b",
+      "destination": "lib/compiler/ir-to-taptop.js",
+      "adapted": true,
+      "extractedSha256": "b47cdb8f3774e8fa0c3e88aa4b6cbeaaad71a71d998f793347455b2a4bbd42ad"
+    },
+    {
+      "source": "taptop-export/lib/behavior-adapter-registry.js",
+      "sha256": "c15c11dc42b7ccd30b92cae3e792215bc6c6c8d6a160fd5ef2982966c0de27cf",
+      "destination": "lib/behavior-adapter-registry.js",
+      "adapted": false,
+      "extractedSha256": "c15c11dc42b7ccd30b92cae3e792215bc6c6c8d6a160fd5ef2982966c0de27cf"
+    },
+    {
+      "source": "taptop-export/contracts/behaviors/adapter-registry.json",
+      "sha256": "6e22573e090a2ea9237d3083bee0439f050187ba3b74ad98f9b92eb4c6d4460e",
+      "destination": "contracts/behaviors/adapter-registry.json",
+      "adapted": true,
+      "extractedSha256": "4d718c5426a5191f728ae64fa7d08e4e688fbb714be88613ee4b6350bb62b91c"
+    },
+    {
+      "source": "taptop-export/lib/html-ir-contract.js",
+      "sha256": "7798ba87f30b5f30c4d26fa8d6ebbc103a63e919938bd1dcf762c575b02e89b8",
+      "destination": "lib/html-ir-contract.js",
+      "adapted": false,
+      "extractedSha256": "7798ba87f30b5f30c4d26fa8d6ebbc103a63e919938bd1dcf762c575b02e89b8"
+    },
+    {
+      "source": "taptop-export/lib/component-builders.js",
+      "sha256": "a16de57c939535594c47cd87922a1c4a6c3b5bcc25604aaefb9feaee43d4e16f",
+      "destination": "lib/component-builders.js",
+      "adapted": false,
+      "extractedSha256": "a16de57c939535594c47cd87922a1c4a6c3b5bcc25604aaefb9feaee43d4e16f"
+    },
+    {
+      "source": "taptop-export/lib/ids.js",
+      "sha256": "a87f5c036fc6208b7a3b4fec3f380e5893444e140455cdf1d5f5b7cf4310ca82",
+      "destination": "lib/ids.js",
+      "adapted": true,
+      "extractedSha256": "e642f0a36ea33c599c32dfd4d55b852db765130a6967d2242cfa67a2f8931601"
+    },
+    {
+      "source": "taptop-export/lib/tag-builder.js",
+      "sha256": "f70c9605a41d148746edfb993c7196b923df9425f2f294ef4ea8db16c16c1b6b",
+      "destination": "lib/tag-builder.js",
+      "adapted": false,
+      "extractedSha256": "f70c9605a41d148746edfb993c7196b923df9425f2f294ef4ea8db16c16c1b6b"
+    },
+    {
+      "source": "taptop-export/lib/rule-sets.js",
+      "sha256": "48237055fa254d8c85fb21f415ad6f94b4d90e75af9f3730837b7942f98db9e9",
+      "destination": "lib/rule-sets.js",
+      "adapted": false,
+      "extractedSha256": "48237055fa254d8c85fb21f415ad6f94b4d90e75af9f3730837b7942f98db9e9"
+    },
+    {
+      "source": "taptop-export/lib/tokens.js",
+      "sha256": "df47c3f56c8872e5127e9622edf02876937f550bb3f3ead425d6c1b3bed939b6",
+      "destination": "lib/tokens.js",
+      "adapted": true,
+      "extractedSha256": "5a8d4cf7a74a6e20f3d270f46e7425d6d071652d7be6f3cdb6fc18a481c62141"
+    },
+    {
+      "source": "taptop-export/lib/compiler/html-to-ir.js",
+      "sha256": "256c8c8e3a557bb5ef4dbc0dd0c8b0ab0f51df2c31e8a9d57888bf62e3a6f06e",
+      "destination": "lib/compiler/html-to-ir.js",
+      "adapted": false,
+      "extractedSha256": "256c8c8e3a557bb5ef4dbc0dd0c8b0ab0f51df2c31e8a9d57888bf62e3a6f06e"
+    }
+  ]
+}

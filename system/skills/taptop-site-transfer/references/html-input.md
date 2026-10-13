@@ -1,0 +1,21 @@
+# Prepared HTML/CSS input
+
+1. Copy the user's page unchanged into `input/<name>/`: the HTML, its CSS, and its local images (next to the HTML or in subfolders; `../` image paths are rejected). Never edit these originals and never hand-convert them to the compiler profile.
+2. Record the source in `design-system/sources.md`. If the project has no UI kit yet, derive it from the supplied CSS first ([kit data](kit-data.md)): every typography, button and link class becomes a kit role even if it is used once (the UI-kit rule in root `AGENTS.md`); layout classes (sections, grids, cards' wrappers) stay page-only; colors, spacing and radius go into the kit only as values the CSS actually uses. Keep the source's class names so the original stays untouched, except system names: `.button`, `.text`, `.image` … become `u-button`, `u-text`, `u-image` in the normalized page (`RESERVED_CLASS_RENAMED`), so write them as `u-<name>` in `kit.json` and `roles.css`. Likewise `col-1`, `mt-0`, `step-01` become `col_1`, `mt_0`, `step_01` (`CLASS_COUNTER_RENAMED`): Taptop would store them under another name.
+3. Optional but recommended: an intake (`sourceType: html`, `html.entry`, `html.stylesheets`) in `input/<name>/intake.json`.
+4. Register and build. If the project has a UI kit and the page should use it, put `design-system/roles.css` first and add `--depends ui-kit`; otherwise list only the page's CSS:
+
+```sh
+npm run toolkit -- artifact add --project projects/<folder> --key pages/<name> --html input/<name>/index.html --css input/<name>/styles.css [--css …] [--intake input/<name>/intake.json] [--root .page-root]
+npm run toolkit -- build --project projects/<folder> --artifact pages/<name>
+```
+
+The build runs the normalizer. Its report is `.taptop/work/pages--<name>/normalization-report.json` and is copied next to the preview. Errors (`UNSUPPORTED_TAG`, `MIXED_CONTENT`, `BEHAVIOR_UNSUPPORTED` …) stop the build: tell the user what is unsupported in plain language. Warnings go to the user too: `ANCHOR_TARGET_REMOVED` (set the anchor again in Taptop), `RESERVED_CLASS_RENAMED` (a system class name was renamed), `BODY_METADATA_DROPPED` (set needed SEO or social-preview values in Taptop), and `ROOT_WRAPPED` (several top-level blocks were wrapped in one `.page` root; pass `--root .<class>` when the page has one real root). `IMAGE_DIMENSIONS_JOINED` repeats split image dimensions on one class; compare the image at every canvas width. The full rule set is `system/docs/html-normalizer.md`. Fonts are referenced by name in Taptop; do not ask the user to “connect” fonts.
+
+Prove fidelity before import: `npm run toolkit -- serve`, open `links.compare` from the build output, require a non-zero matched-element count and zero differences at 1440/992/768/480/320 and 900/700/375, or explain each difference. Record it with `check --level local`.
+
+Interactive blocks are built from ordinary elements. Mark an accordion root with `data-taptop-behavior="accordion"` and a mobile menu with `data-taptop-behavior="menu"`; their behavior and any CSS Taptop classes cannot express ship as hidden Embeds in `Scripts` and work on the published page. The normalizer recognizes Tilda `.t-slds` slide carousels, `t1196` card carousels, `t-video-lazyload` inline MP4 and `t-popup`/`t1013__html5video` MP4 dialogs, then emits their generated adapters. They are locally tested only: obtain an editor roundtrip and published-page result before calling them verified. Tabs and forms stay `UNSUPPORTED`. Never copy the source page's JavaScript.
+
+The normalizer lowers same-element compound selectors such as `.btn.flex` to classes (`SELECTOR_LOWERED`). If a button still loses its source color or background, treat the local comparison as failed and inspect the embed cascade before import.
+
+Legacy projects (no `layoutVersion`) use `npm run toolkit -- normalize <project> <html> <css>` and `compile`, which write `source/normalized/` once.
