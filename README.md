@@ -40,6 +40,7 @@
 | --- | --- | --- |
 | **Компьютер** с Windows, macOS или Linux | — | — |
 | **ИИ-ассистент** [Claude Code](https://claude.com/claude-code) или [Codex](https://developers.openai.com/codex) | Claude Code есть в приложении Claude (вкладка Code) и в терминале. Codex — в приложении Codex и в терминале | Нужна платная подписка Claude или ChatGPT |
+| **Taptop Toolkit** — этот репозиторий | Установка описана ниже | Бесплатно |
 | **[Node.js](https://nodejs.org)** | На сайте скачайте версию с пометкой **LTS** и установите, как обычную программу. Нужна версия 22 или новее | Бесплатно |
 | **Google Chrome** и расширение **[Taptop Toolkit Importer](https://github.com/staumakes/taptop-toolkit-importer)** | Установка описана ниже | Бесплатно |
 | **Аккаунт Taptop** с доступом к проекту, куда переносите | [taptop.pro](https://taptop.pro) | По тарифам Taptop |
