@@ -72,11 +72,11 @@ async function main(args) {
     print({ projects: result.projects.map(({ namespace, displayName, relativePath }) => ({ namespace, displayName, relativePath })), issues: result.issues, warnings: result.warnings });
     if (result.issues.length) process.exitCode = 1;
   } else if (command === 'artifact' && values[0] === 'add') {
-    const opts = options(values.slice(1), { repeatable: ['css', 'depends'], allowed: ['project', 'key', 'title', 'html', 'css', 'root', 'intake', 'depends'] });
+    const opts = options(values.slice(1), { repeatable: ['css', 'external-css', 'depends'], allowed: ['project', 'key', 'title', 'html', 'css', 'external-css', 'root', 'intake', 'depends'] });
     const root = selectProject(opts.project);
     const release = acquireProjectLock(root, `artifact add ${opts.key}`);
     try {
-      const artifact = addArtifact(root, { key: opts.key, title: opts.title, html: opts.html, stylesheets: opts.css || [], rootSelector: opts.root, intake: opts.intake, dependsOn: opts.depends });
+      const artifact = addArtifact(root, { key: opts.key, title: opts.title, html: opts.html, stylesheets: opts.css || [], externalStylesheets: opts['external-css'], rootSelector: opts.root, intake: opts.intake, dependsOn: opts.depends });
       print({ artifact, next: `npm run toolkit -- build --project ${projectArgument(root)} --artifact ${artifact.key}` });
     } finally { release(); }
   } else if ((command === 'artifact' && values[0] === 'list') || command === 'artifacts') {

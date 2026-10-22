@@ -1,5 +1,6 @@
 const crypto = require('node:crypto');
 const path = require('node:path');
+const { layerName } = require('./html-whitespace');
 
 const LOGICAL_KEY = /^[A-Za-z0-9][A-Za-z0-9._/-]*$/;
 const SHA256 = /^[a-f0-9]{64}$/;
@@ -26,7 +27,7 @@ function canonical(value) {
 function validateHtmlCompilerManifest(manifest) {
   const errors = [];
   if (!isPlainObject(manifest)) return ['manifest must be an object'];
-  const allowed = new Set(['schemaVersion', 'componentKey', 'html', 'rootSelector', 'stylesheets', 'selectorMappings', 'typographyCompositions', 'behaviorManifest', 'embedStylesheet', 'breakpointMap']);
+  const allowed = new Set(['schemaVersion', 'componentKey', 'html', 'rootSelector', 'stylesheets', 'selectorMappings', 'typographyCompositions', 'behaviorManifest', 'embedStylesheet', 'breakpointMap', 'externalClasses']);
   for (const key of Object.keys(manifest)) if (!allowed.has(key)) errors.push(`manifest has unknown field "${key}"`);
   if (manifest.schemaVersion !== 1) errors.push('manifest.schemaVersion must be 1');
   if (!LOGICAL_KEY.test(manifest.componentKey || '')) errors.push('manifest.componentKey must be a logical key');
@@ -76,6 +77,12 @@ function validateHtmlCompilerManifest(manifest) {
         }
       });
     }
+  }
+  // Classes of the target site's own stylesheet used on layers: kept by name, never compiled into rules.
+  if (manifest.externalClasses !== undefined) {
+    const names = manifest.externalClasses;
+    if (!Array.isArray(names) || names.some((name) => typeof name !== 'string' || !/^-?[_a-zA-Z][_a-zA-Z0-9-]*$/.test(name))) errors.push('manifest.externalClasses must be an array of class names');
+    else if (names.some((name, index) => index > 0 && names[index - 1] >= name)) errors.push('manifest.externalClasses must be sorted without duplicates');
   }
   if (!isPlainObject(manifest.breakpointMap)) errors.push('manifest.breakpointMap must be an object');
   else for (const [source, target] of Object.entries(manifest.breakpointMap)) {
@@ -167,6 +174,8 @@ function validateHtmlIr(ir) {
     if (!isPlainObject(node.source) || !isSafeRelativePath(node.source.path) || !Number.isInteger(node.source.line) || node.source.line < 1 || !Number.isInteger(node.source.column) || node.source.column < 1 || !node.source.domPath) {
       errors.push(`IR node "${key}" has invalid source location`);
     }
+    // The same rule html-to-ir.js applies to data-taptop-name: non-blank (Unicode spaces count as blank), trimmed, collapsed.
+    if (node.name !== undefined && (typeof node.name !== 'string' || layerName(node.name) !== node.name)) errors.push(`IR node "${key}" name must be a layer name: not only whitespace, no ASCII whitespace at the edges, single spaces inside`);
     if (node.behaviorKey !== undefined && !behaviors[node.behaviorKey]) errors.push(`IR node "${key}" references missing behavior "${node.behaviorKey}"`);
   }
 

@@ -16,11 +16,12 @@ const { toTaptopRule } = require('./css-rules');
 // real example's default/no-op values (eventName: 'none' = no click
 // behavior). See build-hero-vertical.js's original comment for the full
 // provenance note.
-function buildButton(makeTag, { parent, bemClasses, text, className = 'button', href = '' }) {
+// `name` is the layer-panel name; without it the layer is named after its last class.
+function buildButton(makeTag, { parent, bemClasses, name, text, className = 'button', href = '' }) {
   const tButton = makeTag({
     widgetName: 'tt_link_universal', type: 'tt_link_button', alias: 'Button',
     className, bemClasses,
-    name: bemClasses[bemClasses.length - 1],
+    name: name || bemClasses[bemClasses.length - 1],
     parent,
     extraData: { href: { type: 'STRING', value: href } },
     extra: {
@@ -47,11 +48,11 @@ function buildButton(makeTag, { parent, bemClasses, text, className = 'button', 
 // fixture. A real link is not a button with two fields removed: it is
 // tt_link_universal/tt_link_block, has tagName "a", the system class
 // "link-block", screen.type "link" and SET_LINK_UNIVERSAL capability.
-function buildLinkWrapper(makeTag, { parent, bemClasses, href = '', className = 'link-block', alias = 'Link Block' }) {
+function buildLinkWrapper(makeTag, { parent, bemClasses, name, href = '', className = 'link-block', alias = 'Link Block' }) {
   return makeTag({
     widgetName: 'tt_link_universal', type: 'tt_link_block', tagName: 'a', alias,
     className, bemClasses,
-    name: bemClasses[bemClasses.length - 1],
+    name: name || bemClasses[bemClasses.length - 1],
     parent,
     extraData: { href: { type: 'STRING', value: href } },
     extra: {
@@ -67,8 +68,8 @@ function buildLinkWrapper(makeTag, { parent, bemClasses, href = '', className = 
   });
 }
 
-function buildLink(makeTag, { parent, bemClasses, text, href = '', className = 'link-block' }) {
-  const tLink = buildLinkWrapper(makeTag, { parent, bemClasses, href, className });
+function buildLink(makeTag, { parent, bemClasses, name, text, href = '', className = 'link-block' }) {
+  const tLink = buildLinkWrapper(makeTag, { parent, bemClasses, name, href, className });
   makeTag({
     widgetName: 'text', type: 'text', alias: 'text', className: 'text', bemClasses: [],
     parent: tLink, text,
@@ -96,7 +97,7 @@ function buildImageLink(makeTag, { parent, bemClasses, href = '', className = 'l
 // uploads its bytes and patches the target-local data.src.
 // Explicit width/height remain mandatory because Taptop defaults an unsized
 // tt_image to a fixed 100x100px.
-function buildImage(makeTag, { parent, bemClasses = [], assetKey, alt = '', objectFit = 'cover', lockRatio = true, maxWidth, maxHeight, className = 'image' }) {
+function buildImage(makeTag, { parent, bemClasses = [], name, assetKey, alt = '', objectFit = 'cover', lockRatio = true, maxWidth, maxHeight, className = 'image' }) {
   // maxWidth/maxHeight used to silently default to '2040'/'1020' — turned
   // out to be the exact real pixel size of ONE specific image
   // (hero-vertical's), not a safe generic fallback. Every other image that
@@ -111,7 +112,7 @@ function buildImage(makeTag, { parent, bemClasses = [], assetKey, alt = '', obje
   const tImageWrapper = makeTag({
     widgetName: 'tt_image', type: 'tt_image', alias: 'Image',
     className, bemClasses,
-    name: bemClasses[bemClasses.length - 1] || className,
+    name: name || bemClasses[bemClasses.length - 1] || className,
     parent,
     extra: {
       widgetSettings: { screen: { objectFit, lockRatio, maxWidth, maxHeight } },
@@ -224,7 +225,9 @@ function solidFillGradientRule(colorValue) {
 // `background-image` mirror below is unconfirmed to do anything for this
 // widget and is kept only because removing it has not been live-verified
 // either — do not treat its presence as evidence it matters.
-function mirrorButtonFillsToDesignCollection(tags, mainClassNameCollection, mainSelectorCollection) {
+// `external`: classes of the target site's own stylesheet; the fill class is
+// never named after one (a page class of the layer is required).
+function mirrorButtonFillsToDesignCollection(tags, mainClassNameCollection, mainSelectorCollection, external = new Set()) {
   const designClassNameCollection = { map: {} };
   const designSelectorCollection = { map: {} };
   const usedDesignClassIds = new Set();
@@ -238,7 +241,9 @@ function mirrorButtonFillsToDesignCollection(tags, mainClassNameCollection, main
     if (tag.widgetName !== 'tt_link_universal') return;
     const classNames = (tag.classNameIds || []).map((id) => mainClassNameCollection.map[id]?.value).filter(Boolean);
     const bgClassName = classNames.find((name) => mainSelectorCollection.map[`screen/.${name}`]?.rules['background-color']);
-    const fillSource = bgClassName || classNames[classNames.length - 1];
+    const ownNames = classNames.filter((name) => !external.has(name));
+    const fillSource = bgClassName || ownNames[ownNames.length - 1];
+    if (!fillSource && classNames.length) throw new Error(`EXTERNAL_ONLY_ELEMENT: a link or button layer with only external classes (${classNames.join(' ')}) needs a page class for its fill class`);
     if (!fillSource) return;
 
     if (bgClassName) {

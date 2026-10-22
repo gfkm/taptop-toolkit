@@ -1,3 +1,5 @@
+const { BEHAVIOR_CLASS, ownRuleText } = require('./toolkit-classes');
+
 const CLASS_NAME = /^-?[_a-zA-Z]+[_a-zA-Z0-9-]*$/;
 
 function buildAccordionEmbedCode(config) {
@@ -17,7 +19,7 @@ function buildAccordionEmbedCode(config) {
   const { rootSelector, itemSelector, openClass } = runtimeConfig;
   const panelSelector = `.${config.panelClass}`;
   const style = `<style>
-.toolkit-behavior { display: none; }
+${ownRuleText(BEHAVIOR_CLASS)}
 ${rootSelector} ${itemSelector}.${openClass} ${panelSelector} { display: block; }
 ${rootSelector} ${itemSelector}:not(.${openClass}) ${panelSelector} { display: none; }
 </style>`;

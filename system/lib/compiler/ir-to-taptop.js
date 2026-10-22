@@ -15,9 +15,10 @@ const { buildMenuEmbedCode } = require('../menu-embed-code');
 const { buildSliderEmbedCode } = require('../slider-embed-code');
 const { buildVideoEmbedCode } = require('../video-embed-code');
 const { buildRevealEmbedCode } = require('../reveal-embed-code');
+const { buildStepsEmbedCode } = require('../steps-embed-code');
 const EMBED_BUILDERS = { 'taptop/embed-accordion-v1': buildAccordionEmbedCode, 'taptop/embed-menu-v1': buildMenuEmbedCode,
   'taptop/embed-slider-v1': buildSliderEmbedCode, 'taptop/embed-video-v1': buildVideoEmbedCode,
-  'taptop/embed-reveal-v1': buildRevealEmbedCode };
+  'taptop/embed-reveal-v1': buildRevealEmbedCode, 'taptop/embed-steps-v1': buildStepsEmbedCode };
 const embedFixture = require('../../contracts/behaviors/fixtures/tt-embed-v1.json');
 
 const CHANNEL_COLLECTION = {
@@ -157,32 +158,34 @@ function compileIrToTaptop({ ir, manifest, stylesheetTexts, assetKeys = {} }) {
   function buildNode(key, parent) {
     const node = ir.nodes[key];
     const bemClasses = composedClasses(node.classes);
+    // The layer-panel name: data-taptop-name (html-to-ir.js), else the last class as before.
+    const name = node.name || node.classes[node.classes.length - 1];
     let targetId;
     if (node.kind === 'container') {
-      targetId = makeTag({ widgetName: 'div', type: 'div', className: 'div', bemClasses, name: node.classes[node.classes.length - 1], parent });
+      targetId = makeTag({ widgetName: 'div', type: 'div', className: 'div', bemClasses, name, parent });
     } else if (node.kind === 'text') {
-      targetId = makeTag({ widgetName: 'text', type: 'text', className: 'text', bemClasses, name: node.classes[node.classes.length - 1], parent, text: node.text || '' });
+      targetId = makeTag({ widgetName: 'text', type: 'text', className: 'text', bemClasses, name, parent, text: node.text || '' });
     } else if (node.kind === 'button') {
-      targetId = buildButton(makeTag, { parent, bemClasses, text: node.text || '', href: '' });
+      targetId = buildButton(makeTag, { parent, bemClasses, name, text: node.text || '', href: '' });
     } else if (node.kind === 'link') {
-      targetId = buildLink(makeTag, { parent, bemClasses, text: node.text || '', href: node.attributes.href || '' });
+      targetId = buildLink(makeTag, { parent, bemClasses, name, text: node.text || '', href: node.attributes.href || '' });
     } else if (node.kind === 'link-block') {
-      targetId = buildLinkWrapper(makeTag, { parent, bemClasses, href: node.attributes.href || '' });
+      targetId = buildLinkWrapper(makeTag, { parent, bemClasses, name, href: node.attributes.href || '' });
     } else if (node.kind === 'image') {
       const assetKey = assetKeys[node.asset.sourcePath];
       if (!assetKey) throw compilerError('MISSING_PACKAGE_ASSET', `No package asset mapped for ${node.asset.sourcePath}`);
       targetId = buildImage(makeTag, {
-        parent, bemClasses, assetKey, alt: node.asset.alt,
+        parent, bemClasses, name, assetKey, alt: node.asset.alt,
         objectFit: screenValue(bemClasses, 'object-fit') || 'cover',
         maxWidth: String(node.asset.intrinsicWidth), maxHeight: String(node.asset.intrinsicHeight)
       });
     } else if (node.kind === 'rich-text') {
       // Native copy of a Rich Text layer (2026-10-11): one tag, inner HTML kept verbatim.
-      targetId = makeTag({ widgetName: 'tt_rich_text', type: 'tt_rich_text', className: 'tt-rich-text', bemClasses, name: node.classes[node.classes.length - 1], parent,
+      targetId = makeTag({ widgetName: 'tt_rich_text', type: 'tt_rich_text', className: 'tt-rich-text', bemClasses, name, parent,
         extraData: { text: { type: 'RICH_TEXT', value: node.html } }, extra: { can: ['SELECT', 'SET_RICH_TEXT'], dataSource: 'from_parent' } });
     } else if (node.kind === 'inline-svg') {
       // Native copy of an SVG Icon layer (2026-10-11): a <span class="svg-icon"> holding the SVG markup.
-      targetId = makeTag({ widgetName: 'tt_svg_icon', type: 'tt_svg_icon', tagName: 'span', alias: 'SVG Icon', className: 'svg-icon', bemClasses, name: node.classes[node.classes.length - 1], parent,
+      targetId = makeTag({ widgetName: 'tt_svg_icon', type: 'tt_svg_icon', tagName: 'span', alias: 'SVG Icon', className: 'svg-icon', bemClasses, name, parent,
         extraData: { text: { type: 'HTML', value: node.html } }, extra: { can: ['SELECT', 'SET_ATTR_SRC_SVG'], dataSource: 'from_parent' } });
     } else {
       throw compilerError('UNSUPPORTED_IR_ADAPTER', `kind ${JSON.stringify(node.kind)} at ${node.source.domPath}`);
@@ -195,7 +198,7 @@ function compileIrToTaptop({ ir, manifest, stylesheetTexts, assetKeys = {} }) {
   }
 
   const rootId = buildNode(ir.rootKey);
-  const fillCollections = mirrorButtonFillsToDesignCollection(tags, mainClassNameCollection, collections.mainSelectorCollection);
+  const fillCollections = mirrorButtonFillsToDesignCollection(tags, mainClassNameCollection, collections.mainSelectorCollection, new Set(manifest.externalClasses || []));
   // Explicit design mappings and mandatory widget fill finalization share one
   // channel. A duplicate key is merged by property so neither source is lost.
   for (const [key, entry] of Object.entries(fillCollections.designSelectorCollection.map)) {

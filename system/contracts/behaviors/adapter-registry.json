@@ -71,6 +71,19 @@
       }
     },
     {
+      "id": "taptop/embed-steps-v1",
+      "category": "tabs",
+      "status": "locally-reproduced",
+      "blockerReason": "The generated steps script (stepper and tabs) has local tests against a synthetic DOM; a published Taptop page and editor roundtrip are still required.",
+      "observations": ["contracts/behaviors/observations/taptop-embed-steps-v1.json"],
+      "evidence": {
+        "nativeFixture": "contracts/behaviors/fixtures/tt-embed-v1.json",
+        "contract": "docs/html-normalizer.md",
+        "serializerAdapter": "lib/steps-embed-code.js",
+        "editorRoundtrip": null
+      }
+    },
+    {
       "id": "taptop/accordion-v1",
       "category": "accordion",
       "status": "research-required",

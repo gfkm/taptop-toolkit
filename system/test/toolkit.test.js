@@ -4,6 +4,7 @@ const fs = require('node:fs');
 const os = require('node:os');
 const path = require('node:path');
 const { spawnSync } = require('node:child_process');
+const { linkOrSkip } = require('../test-support/link');
 const cli = path.resolve(__dirname, '../bin/taptop.js');
 const PNG_1X1 = Buffer.from('89504e470d0a1a0a0000000d49484452000000010000000108060000001f15c4890000000d49444154789c6360f8cff01f00050001ff89993d1d0000000049454e44ae426082', 'hex');
 function run(...args) { return spawnSync(process.execPath, [cli, ...args], { encoding: 'utf8' }); }
@@ -32,7 +33,7 @@ test('init creates an empty isolated project and refuses all existing destinatio
 });
 test('intake validates a declared source without changing the project state', t => {
   const root = project(t);
-  const listing = () => fs.readdirSync(root, { recursive: true }).filter(name => name !== 'source/intake.json').sort();
+  const listing = () => fs.readdirSync(root, { recursive: true }).filter(name => name !== path.join('source', 'intake.json')).sort();
   const state = [fs.readFileSync(path.join(root, 'taptop.project.json'), 'utf8'), listing()];
   fs.writeFileSync(path.join(root, 'source/intake.json'), JSON.stringify({
     schemaVersion: 1,
@@ -73,7 +74,7 @@ test('blocks traversal and symlink input outside the project', t => {
   const root = project(t); const manifest = sources(root);
   manifest.html = '../outside.html'; fs.writeFileSync(path.join(root, 'source/manifest.json'), JSON.stringify(manifest));
   assert.notEqual(run('compile', root, 'source/manifest.json', path.join(root, 'output/a.json')).status, 0);
-  manifest.html = 'source/escape.html'; fs.symlinkSync(__filename, path.join(root, manifest.html));
+  manifest.html = 'source/escape.html'; if (!linkOrSkip(t, __filename, path.join(root, manifest.html))) return;
   fs.writeFileSync(path.join(root, 'source/manifest.json'), JSON.stringify(manifest));
   assert.match(run('compile', root, 'source/manifest.json', path.join(root, 'output/b.json')).stderr, /OUTSIDE_PROJECT/);
 });

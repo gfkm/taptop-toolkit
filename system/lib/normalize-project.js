@@ -37,7 +37,10 @@ function copyNormalizedAssets(root, htmlPath, normalizedHtml, destinationDirecto
 // full report are written next to each other and never overwritten. Managed
 // builds pass their own stable directory and component key; the directory is
 // part of the source revision, so it must not contain a build ID.
-async function normalizeInto(root, { htmlPath, cssPaths, rootSelector, componentKey, directory, reportSource }) {
+// External stylesheets (the target site's own) are linked, not copied: the
+// preview and the keyed original both load the project file first, by a path
+// relative to their own folder (output/html/<build>/ is as deep as the work folder).
+async function normalizeInto(root, { htmlPath, cssPaths, externalCssPaths = [], rootSelector, componentKey, directory, reportSource }) {
   loadProject(root);
   ensureProjectDirectory(root, path.posix.dirname(directory));
   const target = path.join(root, directory);
@@ -46,6 +49,7 @@ async function normalizeInto(root, { htmlPath, cssPaths, rootSelector, component
     htmlText: readProjectFile(root, htmlPath),
     // Several stylesheets are one cascade, in the listed order; each is repaired on its own.
     stylesheets: cssPaths.map(file => ({ label: file, text: readProjectFile(root, file) })),
+    externalStylesheets: externalCssPaths.map(file => ({ label: file, text: readProjectFile(root, file), href: path.posix.relative(directory, file) })),
     rootSelector,
     componentKey,
     paths: {
@@ -53,7 +57,7 @@ async function normalizeInto(root, { htmlPath, cssPaths, rootSelector, component
       embedCss: `${directory}/page.embed.css`, behaviors: `${directory}/behaviors.json`, preview: `${directory}/taptop-preview.css`
     }
   });
-  const report = { source: reportSource || { html: htmlPath, css: cssPaths }, ...result.report };
+  const report = { source: reportSource || { html: htmlPath, css: cssPaths, ...(externalCssPaths.length ? { externalCss: externalCssPaths } : {}) }, ...result.report };
   ensureProjectDirectory(root, directory);
   const assets = copyNormalizedAssets(root, htmlPath, result.html, target);
   const files = [
@@ -68,7 +72,8 @@ async function normalizeInto(root, { htmlPath, cssPaths, rootSelector, component
   // The original with the result's keys, for the comparison tool. <base> makes
   // its own relative stylesheets and images load from the original folder.
   const base = `${path.posix.relative(directory, path.posix.dirname(htmlPath)) || '.'}/`;
-  files.push([`${directory}/original.html`, result.keyedOriginal.replace(/<head(\s[^>]*)?>/i, match => `${match}<base href="${base}">`)]);
+  const externalLinks = externalCssPaths.map(file => `<link rel="stylesheet" href="${path.posix.relative(path.posix.dirname(htmlPath), file)}">`).join('');
+  files.push([`${directory}/original.html`, result.keyedOriginal.replace(/<head(\s[^>]*)?>/i, match => `${match}<base href="${base}">${externalLinks}`)]);
   for (const [file, content] of files) fs.writeFileSync(path.join(root, file), content, { flag: 'wx' });
   return { ok: report.ok, manifest: `${directory}/manifest.json`, report: `${directory}/normalization-report.json`, files: files.map(([file]) => file), items: report.items, assets };
 }

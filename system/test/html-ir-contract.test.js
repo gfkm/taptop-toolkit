@@ -90,3 +90,13 @@ test('rejects unsupported node kinds and missing design classes before a Taptop 
   assert.ok(errors.some((error) => error.includes('unsupported kind')));
   assert.ok(errors.some((error) => error.includes('at least one real class')));
 });
+
+test('a node name is valid only in the form layerName gives it', () => {
+  const nameErrors = (name) => {
+    const ir = validIr();
+    ir.nodes['hero/title'].name = name;
+    return validateHtmlIr(ir).filter((error) => error.includes('name'));
+  };
+  for (const name of ['Title', 'Hero\u00a0title', '\u00a0Title']) assert.deepStrictEqual(nameErrors(name), [], JSON.stringify(name));
+  for (const name of ['', ' Title', 'Hero  title', 'Hero\ttitle', '\u00a0', '\u00a0\u2003', 7]) assert.strictEqual(nameErrors(name).length, 1, JSON.stringify(name));
+});

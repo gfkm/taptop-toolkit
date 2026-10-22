@@ -3,6 +3,7 @@ const fs = require('node:fs');
 const os = require('node:os');
 const path = require('node:path');
 const test = require('node:test');
+const { linkOrSkip } = require('../test-support/link');
 const { initProject } = require('../lib/project');
 const { addArtifact, getArtifact, readArtifacts, artifactSlug } = require('../lib/project-artifacts');
 
@@ -81,7 +82,7 @@ test('a hand-edited registry with a cycle, unknown field or symlinked source is 
   const outside = fs.mkdtempSync(path.join(os.tmpdir(), 'taptop-outside-'));
   t.after(() => fs.rmSync(outside, { recursive: true, force: true }));
   fs.writeFileSync(path.join(outside, 'x.html'), '');
-  fs.symlinkSync(path.join(outside, 'x.html'), path.join(root, 'source/components/link.html'));
+  if (!linkOrSkip(t, path.join(outside, 'x.html'), path.join(root, 'source/components/link.html'))) return;
   fs.writeFileSync(file, JSON.stringify({ schemaVersion: 1, artifacts: [] }));
   assert.throws(() => addArtifact(root, { ...entry('components/link'), html: 'source/components/link.html' }), /OUTSIDE_PROJECT/);
 });

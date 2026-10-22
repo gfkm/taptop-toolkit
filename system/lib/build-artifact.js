@@ -2,6 +2,8 @@ const fs = require('node:fs');
 const path = require('node:path');
 const { randomBytes } = require('node:crypto');
 const { version } = require('../../package.json');
+// Called through the module so a test can stand in another code revision.
+const toolkitSource = require('./toolkit-revision');
 const { loadProject, readProjectFile, ensureProjectDirectory } = require('./project');
 const { getArtifact, listArtifacts } = require('./project-artifacts');
 const { normalizeInto } = require('./normalize-project');
@@ -21,8 +23,10 @@ function canonical(value) {
 
 // What the registry says about how to build this artifact. A change here (other
 // stylesheets, root selector, intake, dependencies) makes the result stale.
+// externalStylesheets is recorded only when registered, so earlier builds
+// without it keep their registration.
 function registrationOf(artifact) {
-  return { html: artifact.html, stylesheets: artifact.stylesheets, rootSelector: artifact.rootSelector || null, intake: artifact.intake || null, dependsOn: artifact.dependsOn };
+  return { html: artifact.html, stylesheets: artifact.stylesheets, ...(artifact.externalStylesheets ? { externalStylesheets: artifact.externalStylesheets } : {}), rootSelector: artifact.rootSelector || null, intake: artifact.intake || null, dependsOn: artifact.dependsOn };
 }
 
 function buildIdFor(date = new Date()) {
@@ -119,7 +123,7 @@ async function buildArtifact({ projectRoot, artifactKey, failAfter = null }) {
     }
     // Inputs are hashed before they are read for the build; a file edited during
     // the build then shows the result as stale instead of silently current.
-    const declared = [artifact.html, ...artifact.stylesheets, ...(artifact.intake ? [artifact.intake] : [])];
+    const declared = [artifact.html, ...artifact.stylesheets, ...(artifact.externalStylesheets || []), ...(artifact.intake ? [artifact.intake] : [])];
     const inputs = declared.map(file => { readProjectFile(root, file); return { path: file, sha256: fileHash(root, file) }; });
 
     buildId = buildIdFor();
@@ -131,7 +135,7 @@ async function buildArtifact({ projectRoot, artifactKey, failAfter = null }) {
     const work = `.taptop/work/${artifact.slug}`;
     ensureProjectDirectory(root, '.taptop/work');
     fs.rmSync(path.join(root, work), { recursive: true, force: true });
-    const normalized = await normalizeInto(root, { htmlPath: artifact.html, cssPaths: artifact.stylesheets, rootSelector: artifact.rootSelector, componentKey: artifact.componentKey, directory: work });
+    const normalized = await normalizeInto(root, { htmlPath: artifact.html, cssPaths: artifact.stylesheets, externalCssPaths: artifact.externalStylesheets || [], rootSelector: artifact.rootSelector, componentKey: artifact.componentKey, directory: work });
     if (!normalized.ok) {
       const codes = [...new Set(normalized.items.filter(item => item.level === 'error').map(item => item.code))];
       throw new Error(`NORMALIZATION_FAILED: ${codes.join(', ')} — see ${normalized.report}`);
@@ -150,6 +154,7 @@ async function buildArtifact({ projectRoot, artifactKey, failAfter = null }) {
     const entry = catalog.artifacts[artifact.key];
     const previous = entry?.current ? entry.builds.find(item => item.buildId === entry.current) : null;
     if (previous && previous.sourceRevision === compiled.sourceRevision && previous.toolkitVersion === version
+      && previous.toolkitRevision === toolkitSource.toolkitRevision()
       && JSON.stringify(canonical(previous.dependencies)) === JSON.stringify(canonical(dependencies))
       && JSON.stringify(canonical(previous.registration || registration)) === JSON.stringify(canonical(registration))
       && fileHash(root, previous.json) === previous.jsonSha256 && fs.existsSync(path.join(root, previous.html))) {
@@ -190,7 +195,7 @@ async function buildArtifact({ projectRoot, artifactKey, failAfter = null }) {
     step('outputs-copied');
 
     const record = {
-      buildId, status: 'succeeded', createdAt: new Date().toISOString(), toolkitVersion: version,
+      buildId, status: 'succeeded', createdAt: new Date().toISOString(), toolkitVersion: version, toolkitRevision: toolkitSource.toolkitRevision(),
       componentKey: artifact.componentKey, sourceRevision: compiled.sourceRevision,
       html: `${htmlDirectory}/page.html`, json: jsonPath, jsonSha256: sha256(packageBytes),
       registration, dependencies, inputs, classes: fingerprints, warnings,

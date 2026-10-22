@@ -1,0 +1,5 @@
+{
+  "adapter": "taptop/embed-steps-v1",
+  "evidenceLevel": "locally-reproduced",
+  "summary": "An Embed can switch state classes on an editable steps root (autoplay from viewport entry, pause on hover, focus or out of view, manual selection by click or keyboard), restore stepper or tabs ARIA and copy the active panel's text; tested against a synthetic DOM only."
+}

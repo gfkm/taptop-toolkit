@@ -3,6 +3,7 @@ const fs = require('node:fs');
 const os = require('node:os');
 const path = require('node:path');
 const test = require('node:test');
+const { linkOrSkip } = require('../test-support/link');
 const { doctorProject } = require('../lib/doctor-project');
 const { buildArtifact } = require('../lib/build-artifact');
 const { addArtifact } = require('../lib/project-artifacts');
@@ -83,7 +84,7 @@ test('doctor flags a symlinked project folder, an abandoned lock and an edited U
   const outside = fs.mkdtempSync(path.join(os.tmpdir(), 'taptop-outside-'));
   t.after(() => fs.rmSync(outside, { recursive: true, force: true }));
   fs.rmSync(path.join(root, 'output'), { recursive: true });
-  fs.symlinkSync(outside, path.join(root, 'output'));
+  if (!linkOrSkip(t, outside, path.join(root, 'output'))) return;
   fs.writeFileSync(path.join(root, '.taptop/lock'), JSON.stringify({ pid: 2147483646, host: os.hostname(), operation: 'build ui-kit', startedAt: '2026-01-01T00:00:00.000Z' }));
   fs.appendFileSync(path.join(root, 'source/ui-kit/ui-kit.css'), '\n.kit { color: #000000; }\n');
   assert.deepEqual(codes(doctorProject(root)), ['LOCK_ABANDONED', 'NOT_BUILT', 'SYMLINKED_PROJECT_FOLDER', 'UI_KIT_MODIFIED']);

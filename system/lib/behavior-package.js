@@ -1,4 +1,5 @@
 const crypto = require('node:crypto');
+const { BEHAVIOR_CLASS, OWN_RULES } = require('./toolkit-classes');
 
 const LOGICAL_KEY = /^[A-Za-z0-9][A-Za-z0-9._/-]*$/;
 
@@ -33,8 +34,10 @@ function behaviorPackageErrors(value) {
 
 // The fixture hides the Embed with `helper--d-none`, a class other tools also
 // create. Taptop keeps an existing project class on paste, so that rule can
-// arrive empty and leave a visible 100px Embed. Use a Toolkit-owned class.
-const HIDDEN_CLASS = 'toolkit-behavior';
+// arrive empty and leave a visible 100px Embed. Use a Toolkit-owned class
+// (toolkit-classes.js; a target site that styles it otherwise is refused,
+// TOOLKIT_CLASS_CONFLICT).
+const HIDDEN_CLASS = BEHAVIOR_CLASS;
 const SHARED_HIDDEN_CLASS = 'helper--d-none';
 
 function hideWithOwnClass(layout) {
@@ -51,7 +54,7 @@ function hideWithOwnClass(layout) {
   delete selectors[`screen/.${SHARED_HIDDEN_CLASS}`];
   selectors[`screen/.${HIDDEN_CLASS}`] = {
     media: 'screen', selectorText: `.${HIDDEN_CLASS}`,
-    rules: { display: { name: 'display', value: 'none', isCustom: false, serializeValue: 'none' } }
+    rules: Object.fromEntries(OWN_RULES[HIDDEN_CLASS].map(([name, value]) => [name, { name, value, isCustom: false, serializeValue: value }]))
   };
 }
 

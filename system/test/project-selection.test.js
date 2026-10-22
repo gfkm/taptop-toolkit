@@ -3,6 +3,7 @@ const fs = require('node:fs');
 const os = require('node:os');
 const path = require('node:path');
 const test = require('node:test');
+const { linkOrSkip } = require('../test-support/link');
 const { spawnSync } = require('node:child_process');
 const { initProject } = require('../lib/project');
 const { listProjects, resolveProject } = require('../lib/workspace-projects');
@@ -47,7 +48,7 @@ test('invalid entries, duplicate namespace and symlink entries do not become imp
   add(root, 'first', 'same');
   add(root, 'second', 'same');
   fs.mkdirSync(path.join(root, 'projects', 'broken'));
-  fs.symlinkSync(os.tmpdir(), path.join(root, 'projects', 'outside'));
+  if (!linkOrSkip(t, os.tmpdir(), path.join(root, 'projects', 'outside'))) return;
   const list = listProjects(root);
   assert.deepEqual(list.projects, []);
   assert.deepEqual(list.issues.map(item => item.code).sort(), ['DUPLICATE_NAMESPACE', 'DUPLICATE_NAMESPACE', 'INVALID_PROJECT', 'SYMLINK_PROJECT'].sort());
@@ -71,7 +72,7 @@ test('CLI projects reports projects without changing either project or shared st
 test('a symlinked projects root is an error rather than an empty workspace', t => {
   const root = fs.mkdtempSync(path.join(os.tmpdir(), 'taptop-workspace-'));
   t.after(() => fs.rmSync(root, { recursive: true, force: true }));
-  fs.symlinkSync(path.join(root, 'missing'), path.join(root, 'projects'));
+  if (!linkOrSkip(t, path.join(root, 'missing'), path.join(root, 'projects'))) return;
   assert.deepEqual(listProjects(root).issues.map(item => item.code), ['INVALID_PROJECTS_DIRECTORY']);
   assert.equal(resolveProject({ workspaceRoot: root }).status, 'needs-selection');
 });

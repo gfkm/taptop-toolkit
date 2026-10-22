@@ -9,7 +9,7 @@ const { isSafeRelativePath } = require('./html-ir-contract');
 const REGISTRY = 'source/artifacts.json';
 const SEGMENT = '[a-z0-9]+(?:-[a-z0-9]+)*';
 const KEY = new RegExp(`^(?:ui-kit|components/${SEGMENT}|pages/${SEGMENT})$`);
-const FIELDS = new Set(['key', 'title', 'html', 'stylesheets', 'rootSelector', 'intake', 'dependsOn']);
+const FIELDS = new Set(['key', 'title', 'html', 'stylesheets', 'externalStylesheets', 'rootSelector', 'intake', 'dependsOn']);
 const KINDS = { 'ui-kit': 'ui-kit', components: 'component', pages: 'page' };
 const GENERATED = ['output/', '.taptop/', 'source/normalized/'];
 
@@ -37,6 +37,14 @@ function normalizeEntry(root, entry, { mustExist }) {
   if (!Array.isArray(entry.stylesheets) || entry.stylesheets.length === 0) throw new Error(`MISSING_STYLESHEETS: ${entry.key}`);
   for (const file of entry.stylesheets) checkSource(root, file, '.css', { mustExist });
   if (new Set(entry.stylesheets).size !== entry.stylesheets.length) throw new Error(`DUPLICATE_STYLESHEET: ${entry.key}`);
+  // External stylesheets belong to the target site: their classes are used by
+  // name and never packaged. A file cannot be both the page's and the site's.
+  if (entry.externalStylesheets !== undefined) {
+    if (!Array.isArray(entry.externalStylesheets) || entry.externalStylesheets.length === 0) throw new Error(`INVALID_EXTERNAL_STYLESHEETS: ${entry.key} needs a non-empty list of .css files`);
+    for (const file of entry.externalStylesheets) checkSource(root, file, '.css', { mustExist });
+    const all = [...entry.stylesheets, ...entry.externalStylesheets];
+    if (new Set(all).size !== all.length) throw new Error(`DUPLICATE_STYLESHEET: ${entry.key}`);
+  }
   if (entry.intake !== undefined) checkSource(root, entry.intake, '.json', { mustExist });
   if (entry.rootSelector !== undefined && !/^\.[_a-zA-Z-][_a-zA-Z0-9-]*$/.test(entry.rootSelector)) throw new Error(`INVALID_ROOT_SELECTOR: ${entry.rootSelector}`);
   if (entry.title !== undefined && (typeof entry.title !== 'string' || !entry.title.trim())) throw new Error(`INVALID_ARTIFACT_TITLE: ${entry.key}`);

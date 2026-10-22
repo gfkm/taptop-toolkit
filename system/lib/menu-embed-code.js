@@ -1,3 +1,5 @@
+const { BEHAVIOR_CLASS, ownRuleText } = require('./toolkit-classes');
+
 const CLASS_NAME = /^-?[_a-zA-Z]+[_a-zA-Z0-9-]*$/;
 
 // Mobile menu: a toggle opens and closes a panel by adding openClass to the
@@ -23,7 +25,7 @@ function buildMenuEmbedCode(config) {
     desktopQuery: '(min-width: 992px)'
   };
   return `<style>
-.toolkit-behavior { display: none; }
+${ownRuleText(BEHAVIOR_CLASS)}
 </style>
 <script>
 (function () {

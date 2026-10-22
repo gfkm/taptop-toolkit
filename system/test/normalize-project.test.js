@@ -3,6 +3,7 @@ const fs = require('node:fs');
 const os = require('node:os');
 const path = require('node:path');
 const test = require('node:test');
+const { linkOrSkip } = require('../test-support/link');
 const { version } = require('../../package.json');
 const { normalizeProject } = require('../lib/normalize-project');
 
@@ -33,7 +34,7 @@ test('normalizing never writes through a source directory that links outside the
   fs.writeFileSync(path.join(root, 'taptop.project.json'), JSON.stringify({ schemaVersion: 1, toolkitVersion: version, namespace: 'link-test' }));
   fs.writeFileSync(path.join(root, 'input/page.html'), '<section class="page"><p class="copy">Text</p></section>');
   fs.writeFileSync(path.join(root, 'input/page.css'), '.page { display: block; } .copy { color: #111111; }');
-  fs.symlinkSync(outside, path.join(root, 'source'));
+  if (!linkOrSkip(t, outside, path.join(root, 'source'))) return;
 
   await assert.rejects(normalizeProject(root, 'input/page.html', 'input/page.css'), /UNSAFE_PROJECT_PATH/);
   assert.deepEqual(fs.readdirSync(outside), []);

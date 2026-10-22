@@ -101,3 +101,48 @@ test('requires every behavioral data attribute to be declared and carries the de
   assert.strictEqual(ir.behaviors['hero/open'].adapter, 'future/dialog-open');
   assert.ok(ir.sources.some((source) => source.role === 'behavior'));
 });
+
+// HTML collapses only ASCII whitespace (tab, LF, FF, CR, space). U+00A0 NO-BREAK SPACE is text: Russian typography
+// puts it deliberately (a hanging preposition, a number and its unit). JavaScript's \s and trim() match it too.
+test('a text keeps its no-break spaces inside, at the start and at the end; only ASCII whitespace collapses', async () => {
+  const html = `<section class="hero" data-taptop-key="hero/root">
+    <h2 class="t-inside">Example&nbsp;heading</h2>
+    <p class="t-start">&nbsp;lead</p>
+    <p class="t-end">tail&nbsp;</p>
+    <p class="t-ascii">  one \n\t\f two \r three  </p>
+    <p class="t-mixed"> \xa0 one \xa0\xa0 two \xa0 </p>
+    <a class="t-link" href="/a">Read&nbsp;more</a>
+    <button class="t-button" type="button">Go&nbsp;on</button>
+  </section>`;
+  const ir = await parseHtmlToIr({ manifest: manifest(), htmlText: html, manifestText: '{}' });
+  assert.strictEqual(ir.nodes['t-inside'].text, 'Example\xa0heading');
+  assert.strictEqual(ir.nodes['t-start'].text, '\xa0lead');
+  assert.strictEqual(ir.nodes['t-end'].text, 'tail\xa0');
+  assert.strictEqual(ir.nodes['t-ascii'].text, 'one two three');
+  assert.strictEqual(ir.nodes['t-mixed'].text, '\xa0 one \xa0\xa0 two \xa0');
+  assert.strictEqual(ir.nodes['t-link'].text, 'Read\xa0more');
+  assert.strictEqual(ir.nodes['t-button'].text, 'Go\xa0on');
+});
+
+test('a text interrupted by a comment is one run, as the browser renders it', async () => {
+  const html = '<section class="hero" data-taptop-key="hero/root"><p class="t">Exam<!-- note -->ple text</p></section>';
+  const ir = await parseHtmlToIr({ manifest: manifest(), htmlText: html, manifestText: '{}' });
+  assert.strictEqual(ir.nodes.t.text, 'Example text');
+});
+
+test('a no-break space is visible text: beside child elements it is mixed content, not dropped', async () => {
+  const container = '<section class="hero" data-taptop-key="hero/root"><div class="box"><p class="a">A</p>&nbsp;</div></section>';
+  await assert.rejects(
+    () => parseHtmlToIr({ manifest: manifest(), htmlText: container, manifestText: '{}' }),
+    (error) => error.code === 'MIXED_HTML_CONTENT'
+  );
+  const only = await parseHtmlToIr({ manifest: manifest(), htmlText: '<section class="hero" data-taptop-key="hero/root"><div class="gap">&nbsp;</div></section>', manifestText: '{}' });
+  assert.strictEqual(only.nodes.gap.kind, 'text');
+  assert.strictEqual(only.nodes.gap.text, '\xa0');
+});
+
+test('a class list splits on ASCII whitespace only: a class token with a no-break space stays one token', async () => {
+  const html = '<section class="hero" data-taptop-key="hero/root"><p class="t\xa0x\tother" data-taptop-key="t">A</p></section>';
+  const ir = await parseHtmlToIr({ manifest: manifest(), htmlText: html, manifestText: '{}' });
+  assert.deepStrictEqual(ir.nodes.t.classes, ['t\xa0x', 'other']);
+});

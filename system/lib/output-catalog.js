@@ -2,6 +2,7 @@ const fs = require('node:fs');
 const path = require('node:path');
 const { createHash } = require('node:crypto');
 const { version } = require('../../package.json');
+const toolkitSource = require('./toolkit-revision');
 const { loadProject, ensureProjectDirectory } = require('./project');
 const { listArtifacts } = require('./project-artifacts');
 
@@ -73,12 +74,12 @@ function artifactStatuses(root, catalog = readCatalog(root)) {
       else if (now !== input.sha256) reasons.push(`input changed: ${input.path}`);
     }
     if (build.registration) {
-      const now = { html: artifact.html, stylesheets: artifact.stylesheets, rootSelector: artifact.rootSelector || null, intake: artifact.intake || null, dependsOn: artifact.dependsOn };
-      for (const field of Object.keys(now)) {
+      const now = { html: artifact.html, stylesheets: artifact.stylesheets, ...(artifact.externalStylesheets ? { externalStylesheets: artifact.externalStylesheets } : {}), rootSelector: artifact.rootSelector || null, intake: artifact.intake || null, dependsOn: artifact.dependsOn };
+      for (const field of new Set([...Object.keys(now), ...Object.keys(build.registration)])) {
         if (JSON.stringify(now[field]) !== JSON.stringify(build.registration[field])) reasons.push(`registration changed: ${field}`);
       }
     } else {
-      const declared = [artifact.html, ...artifact.stylesheets, ...(artifact.intake ? [artifact.intake] : [])];
+      const declared = [artifact.html, ...artifact.stylesheets, ...(artifact.externalStylesheets || []), ...(artifact.intake ? [artifact.intake] : [])];
       for (const file of declared) if (!build.inputs.some(input => input.path === file)) reasons.push(`source list changed: ${file}`);
     }
     for (const dependency of artifact.dependsOn) {
@@ -88,6 +89,8 @@ function artifactStatuses(root, catalog = readCatalog(root)) {
       else if (used !== latest) reasons.push(`dependency rebuilt: ${dependency}`);
     }
     if (build.toolkitVersion !== version) reasons.push(`built with Toolkit ${build.toolkitVersion}`);
+    // A build without the field was made before the Toolkit recorded its code revision (toolkit-revision.js).
+    else if (build.toolkitRevision !== toolkitSource.toolkitRevision()) reasons.push('built by other Toolkit code');
     const missing = [build.json, build.html].filter(file => !fs.existsSync(path.join(root, file)));
     if (missing.length) return { key: artifact.key, kind: artifact.kind, status: 'output-missing', reasons: missing.map(file => `missing: ${file}`), build };
     if (fileHash(root, build.json) !== build.jsonSha256) return { key: artifact.key, kind: artifact.kind, status: 'output-modified', reasons: [`changed after build: ${build.json}`], build };

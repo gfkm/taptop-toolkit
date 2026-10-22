@@ -31,8 +31,13 @@ function serializeHtml(root) {
     const index = (seen.get(first) || 0) + 1;
     seen.set(first, index);
     const key = ` data-taptop-key="${escapeHtml(`${first}-${index}`)}"`;
+    // The kit writes the block class first and its modifier or role last
+    // (kit-section kit-section--type, btn btn--secondary): the last class names
+    // the layer. The normalizer would name it after the first (html-normalizer.md, Layer names).
+    const last = node.classes[node.classes.length - 1];
+    const name = node.classes.length > 1 ? ` data-taptop-name="${escapeHtml(last)}"` : '';
     const attrs = Object.entries(node.attrs).map(([name, value]) => ` ${name}="${escapeHtml(value)}"`).join('');
-    const open = `${'  '.repeat(depth)}<${node.tag} class="${escapeHtml(node.classes.join(' '))}"${key}${attrs}>`;
+    const open = `${'  '.repeat(depth)}<${node.tag} class="${escapeHtml(node.classes.join(' '))}"${key}${name}${attrs}>`;
     if (node.text !== undefined) lines.push(`${open}${escapeHtml(node.text)}</${node.tag}>`);
     else if (!node.children.length) lines.push(`${open}</${node.tag}>`);
     else {

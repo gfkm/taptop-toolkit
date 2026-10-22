@@ -1,9 +1,11 @@
 const path = require('node:path');
 const { computeSourceRevision, isSafeRelativePath, validateHtmlCompilerManifest, validateBehaviorManifest } = require('../html-ir-contract');
+const { collapseAsciiWhitespace, trimAsciiWhitespace, splitClassList, layerName } = require('../html-whitespace');
 
 const CONTAINER_TAGS = new Set(['div', 'section', 'article', 'header', 'footer', 'main', 'nav', 'aside', 'ul', 'ol', 'li']);
 const TEXT_TAGS = new Set(['p', 'span', 'h1', 'h2', 'h3', 'h4', 'h5', 'h6', 'strong', 'em', 'small', 'blockquote']);
-const SERVICE_ATTRIBUTES = new Set(['class', 'data-taptop-key', 'data-taptop-kind']);
+// data-taptop-name is the layer's name in the Taptop layer panel (IR node.name), not an attribute of the layer.
+const SERVICE_ATTRIBUTES = new Set(['class', 'data-taptop-key', 'data-taptop-kind', 'data-taptop-name']);
 
 class HtmlIrCompileError extends Error {
   constructor(code, message, source) {
@@ -19,20 +21,21 @@ function attributesOf(element) {
 }
 
 function classNames(element) {
-  return (attributesOf(element).class || '').split(/\s+/).filter(Boolean);
+  return splitClassList(attributesOf(element).class);
 }
 
 function elementChildren(element) {
   return (element.childNodes || []).filter((child) => child.tagName);
 }
 
+// The element's own text as the browser renders it: text nodes joined as they
+// stand (a comment between two runs adds no space), ASCII whitespace collapsed
+// and trimmed, a no-break space kept (html-whitespace.js).
 function directText(element) {
-  return (element.childNodes || [])
+  return trimAsciiWhitespace(collapseAsciiWhitespace((element.childNodes || [])
     .filter((child) => child.nodeName === '#text')
     .map((child) => child.value)
-    .join(' ')
-    .replace(/\s+/g, ' ')
-    .trim();
+    .join('')));
 }
 
 function domSegment(element) {
@@ -188,6 +191,8 @@ async function parseHtmlToIr({
       throw new HtmlIrCompileError('UNDECLARED_BEHAVIOR', `behavioral attributes ${behavioralAttributes.join(', ')} are not covered by a behavior manifest`, source);
     }
     if (behaviorKey) node.behaviorKey = behaviorKey;
+    const name = layerName(attributesOf(element)['data-taptop-name']);
+    if (name) node.name = name;
     if (['text', 'link', 'button'].includes(kind)) node.text = text;
     if (kind === 'rich-text') node.html = serialize(element);
     if (kind === 'inline-svg') {

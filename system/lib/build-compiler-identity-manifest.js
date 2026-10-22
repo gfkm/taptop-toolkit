@@ -5,12 +5,27 @@ const CHANNELS = [
   ['animation', 'animationSelectorCollection']
 ];
 
+// The four clipboard selector collections, by name.
+const SELECTOR_COLLECTIONS = CHANNELS.map(([, collectionName]) => collectionName);
+
 function escapeRegex(value) {
   return value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 }
 
 function selectorUsesClass(selectorText, className) {
   return new RegExp(`\\.${escapeRegex(className)}(?![-_a-zA-Z0-9])`).test(selectorText);
+}
+
+// Every selector entry of the four collections whose selector uses one of
+// `names` (a class anywhere in the selector text).
+function selectorEntriesUsing(layout, names) {
+  const found = [];
+  for (const collection of SELECTOR_COLLECTIONS) {
+    for (const entry of Object.values(layout?.[collection]?.map || {})) {
+      for (const name of names) if (selectorUsesClass(entry?.selectorText || '', name)) found.push({ collection, entry, name });
+    }
+  }
+  return found;
 }
 
 function buildCompilerIdentityManifest({ clipboardData, namespace, componentKey, stableKeysByClass, instance }) {
@@ -57,4 +72,4 @@ function buildCompilerIdentityManifest({ clipboardData, namespace, componentKey,
   };
 }
 
-module.exports = { buildCompilerIdentityManifest, selectorUsesClass };
+module.exports = { buildCompilerIdentityManifest, selectorUsesClass, selectorEntriesUsing, SELECTOR_COLLECTIONS };

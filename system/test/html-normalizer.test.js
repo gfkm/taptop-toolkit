@@ -100,6 +100,19 @@ test('keeps animation in the embed and drops invalid legacy declarations', async
   assert.ok(codes(result.report).includes('INVALID_VALUE_DROPPED'));
 });
 
+test('moves properties a Taptop class rejects to the embed and keeps their neighbours on the class', async () => {
+  const result = await normalizeHtmlSource({
+    htmlText: page('<div class="root"><div class="pop">Pop</div></div>'),
+    cssText: '.pop { transform-box: fill-box; transform-origin: center; opacity: .5; }'
+  });
+  const rules = rulesOf(result.css);
+  assert.equal(rules['screen .pop']?.['transform-box'], undefined);
+  assert.equal(rules['screen .pop']['transform-origin'], 'center');
+  assert.equal(rules['screen .pop'].opacity, '.5');
+  assert.match(result.embedCss, /\.pop \{ transform-box: fill-box; \}/);
+  assert.ok(codes(result.report).includes('CLASS_PROPERTY_TO_EMBED'));
+});
+
 test('puts both image dimensions on one screen class when selectors split them', async () => {
   const html = page('<div class="frame"><img class="photo" src="photo.png" alt=""></div>');
   const result = await normalizeHtmlSource({ htmlText: html, cssText: '.photo { width: 80px; } .frame .photo { height: 50px; }' });
@@ -287,6 +300,57 @@ test('writes back the browser values that Taptop layer base classes would overri
   assert.equal(rules['screen .note']?.display, undefined, 'inline text stays inline-flex');
   assert.ok(codes(result.report).includes('TAPTOP_BASE_RESET'));
   assert.match(result.previewCss, /:where\([^)]*\[data-taptop-key="links-1"\][^)]*\) \{\n  width: 100%;/, 'the preview gives each element the base of its layer type');
+});
+
+// The image overflow reset is an Embed rule restricted to image layers: `.image` is the tt_image wrapper the compiler
+// emits (buildImage), `img` the source element the local preview renders.
+const imageOverflowRules = css => Object.fromEntries(Object.entries(rulesOf(css)).filter(([key]) => key.includes(':where(.image, img)')));
+
+test('an image gets the browser overflow back through the Embed, so a flex parent cannot shrink it below its width', async () => {
+  const html = page('<div class="root"><div class="tile"><img class="ph" src="data:image/png;base64,AA==" alt=""></div><img class="plain" src="data:image/png;base64,AA==" alt=""></div>');
+  const css = '.tile { width: 200px; display: flex; justify-content: center; overflow: hidden; } .ph { display: block; width: 230px; height: 230px; } .plain { width: 40px; }';
+  const result = await normalizeHtmlSource({ htmlText: html, cssText: css });
+  const rules = rulesOf(result.css);
+  assert.deepEqual(imageOverflowRules(result.embedCss), {
+    'screen .ph:where(.image, img)': { overflow: 'clip' },
+    'screen .plain:where(.image, img)': { overflow: 'clip' }
+  }, 'every image: the parent\'s display in Taptop is not known from the class layer alone');
+  assert.equal(rules['screen .ph'].overflow, undefined, 'never through class sync: a value it refuses fails the whole import');
+  assert.equal(rules['screen .plain'].overflow, undefined);
+  assert.equal(rules['screen .tile'].overflow, 'hidden');
+  assert.ok(codes(result.report).includes('IMAGE_OVERFLOW_TO_EMBED'));
+});
+
+test('an image that sets its own overflow keeps it; a single longhand gets only the other axis back', async () => {
+  const html = page('<div class="root"><img class="own" src="data:image/png;base64,AA==" alt=""><img class="axis" src="data:image/png;base64,AA==" alt=""><img class="both" src="data:image/png;base64,AA==" alt=""></div>');
+  const css = '.own { overflow: visible; } .axis { overflow-x: visible; } .both { overflow-x: hidden; overflow-y: hidden; }';
+  const result = await normalizeHtmlSource({ htmlText: html, cssText: css });
+  const rules = rulesOf(result.css);
+  assert.deepEqual(imageOverflowRules(result.embedCss), {
+    'screen .axis:where(.image, img)': { 'overflow-y': 'clip' }
+  }, 'Taptop\'s hidden on the other axis would turn the visible one into auto; a shorthand would override the source longhand');
+  assert.equal(rules['screen .own'].overflow, 'visible');
+  assert.equal(rules['screen .axis']['overflow-x'], 'visible');
+  assert.equal(rules['screen .axis']['overflow-y'], undefined);
+  assert.equal(rules['screen .both']['overflow-y'], 'hidden');
+});
+
+test('an element that carries an image class keeps the overflow Taptop gives it', async () => {
+  const html = page('<div class="root"><div class="frame pic"><img class="pic" src="data:image/png;base64,AA==" alt=""></div></div>');
+  const css = '.frame { padding: 4px; } .pic { width: 40px; }';
+  const result = await normalizeHtmlSource({ htmlText: html, cssText: css });
+  assert.deepEqual(imageOverflowRules(result.embedCss), { 'screen .pic:where(.image, img)': { overflow: 'clip' } }, 'the rule reaches image layers only, not the block');
+  assert.match(result.html, /<div class="frame pic"/);
+  assert.equal(Object.values(rulesOf(result.css)).some(decls => decls.overflow), false);
+});
+
+test('the image overflow reset loses to every source overflow: other classes, breakpoints, the source Embed rules', async () => {
+  const html = page('<div class="root"><img class="ph" src="data:image/png;base64,AA==" alt=""><img class="ph ph-open" src="data:image/png;base64,AA==" alt=""></div>');
+  const css = '.ph { width: 40px; } .ph-open { overflow: visible; } @media (max-width: 767px) { .ph { overflow: hidden; } } @media (min-width: 1200px) { .ph { overflow: auto; } }';
+  const result = await normalizeHtmlSource({ htmlText: html, cssText: css });
+  const rules = imageOverflowRules(result.embedCss);
+  assert.deepEqual(Object.keys(rules), ['not all and (max-width: 767px) .ph:where(.image, img):where(:not(.ph-open))'], 'left out where a class of the element sets overflow');
+  assert.ok(result.embedCss.indexOf(':where(.image, img)') < result.embedCss.indexOf('overflow: auto'), 'first in the Embed, so a source rule of equal specificity there wins');
 });
 
 test('drops document smooth scrolling because it freezes the Taptop editor canvas', async () => {
@@ -630,4 +694,321 @@ test('a @font-face with a relative font file is reported: the file does not reac
   const item = result.report.items.find(entry => entry.code === 'FONT_FILE_RELATIVE');
   assert.equal(item.level, 'warning');
   assert.deepEqual(item.samples, ['Brand Display']);
+});
+
+test('a relative url() is refused because neither the package nor the Embed stylesheet can carry the file', async () => {
+  const lost = await normalizeHtmlSource({ htmlText: page('<div class="root"><div class="hero">A</div></div>'), cssText: '.hero { background-image: url(img/a.png); }' });
+  const item = lost.report.items.find(entry => entry.code === 'URL_ASSET_LOST');
+  assert.ok(item, 'relative url() is reported');
+  assert.equal(item.level, 'error');
+  assert.equal(lost.report.ok, false);
+  for (const value of ['url(https://cdn.example.com/a.png)', 'url("data:image/png;base64,AAAA")', 'url(//cdn.example.com/a.png)']) {
+    const kept = await normalizeHtmlSource({ htmlText: page('<div class="root"><div class="hero">A</div></div>'), cssText: `.hero { background-image: ${value}; }` });
+    assert.ok(!codes(kept.report).includes('URL_ASSET_LOST'), value);
+    assert.ok(codes(kept.report).includes('URL_TO_EMBED'), value);
+  }
+});
+
+test('a reveal root gets is-inview from the generated reveal Embed and its gated rules ship in the Embed stylesheet', async () => {
+  const result = await normalizeHtmlSource({
+    htmlText: page('<div class="art" data-taptop-behavior="reveal"><p class="line">Visible at rest</p></div>'),
+    cssText: '.line { color: #111111; } .art.is-inview .line { animation: rise 1s both; } @keyframes rise { from { opacity: 0; } }'
+  });
+  assert.equal(result.report.ok, true, JSON.stringify(result.report.items.filter(i => i.level === 'error')));
+  const reveal = result.behaviors.behaviors.find(item => item.adapter === 'taptop/embed-reveal-v1');
+  assert.ok(reveal, 'the reveal root is declared');
+  assert.deepEqual(reveal.config, { targetClass: 'art', startedClass: 'is-inview' });
+  assert.ok(codes(result.report).includes('BEHAVIOR_DECLARED'));
+  assert.ok(!codes(result.report).includes('BEHAVIOR_UNSUPPORTED'));
+  assert.match(result.embedCss, /\.art\.is-inview \.line/);
+  assert.match(result.embedCss, /@keyframes rise/);
+});
+
+test('an embed-only declaration with var() keeps the var() form last, after its resolved fallback', async () => {
+  const result = await normalizeHtmlSource({
+    htmlText: page('<div class="root"><p class="pop dl5">A</p><p class="pop dl7">B</p></div>'),
+    cssText: '.dl5 { --dl: .6s; } .dl7 { --dl: .8s; } .pop { animation: rise 1s ease var(--dl, 0s) both; } @keyframes rise { from { opacity: 0; } }'
+  });
+  const rule = result.embedCss.split('\n').find(line => /\.pop\b[^{]*\{[^}]*animation/.test(line));
+  assert.ok(rule, result.embedCss);
+  const varForm = rule.indexOf('var(--dl, 0s)');
+  const resolved = rule.search(/animation: rise 1s ease (?:\.6s|0s) both/);
+  assert.ok(varForm > -1, rule);
+  assert.ok(resolved === -1 || resolved < varForm, `the var() form must win: ${rule}`);
+  assert.match(result.embedCss, /\.dl7 \{ --dl: \.8s; \}/);
+});
+
+// U+00A0 NO-BREAK SPACE is text, not collapsible whitespace (system/lib/html-whitespace.js).
+const ownTextOf = async (html, className) => {
+  const { parse } = await import('parse5');
+  const found = [];
+  const visit = node => {
+    if ((node.attrs || []).some(item => item.name === 'class' && item.value.split(' ').includes(className))) found.push(node);
+    for (const child of node.childNodes || []) visit(child);
+  };
+  visit(parse(html));
+  return found.map(node => node.childNodes.filter(child => child.nodeName === '#text').map(child => child.value).join(''));
+};
+
+test('a text run wrapped in a flex container keeps its no-break spaces; a run of only a no-break space is wrapped too', async () => {
+  const html = page('<div class="row"><img class="row-icon" src="data:image/png;base64,AA==" width="8" height="8" alt="">&nbsp;Example&nbsp;text&nbsp;<img class="row-end" src="data:image/png;base64,AA==" width="8" height="8" alt="">&nbsp;<img class="row-tail" src="data:image/png;base64,AA==" width="8" height="8" alt=""></div>');
+  const result = await normalizeHtmlSource({ htmlText: html, cssText: '.row { display: flex; } .row-icon, .row-end, .row-tail { display: block; }' });
+  assert.deepEqual(await ownTextOf(result.html, 'row__text'), ['\xa0Example\xa0text\xa0', '\xa0']);
+  assert.ok(!result.report.items.some(item => item.code === 'MIXED_CONTENT'), JSON.stringify(result.report.items.filter(item => item.level === 'error')));
+});
+
+test('a no-break space beside block children is MIXED_CONTENT, never dropped silently', async () => {
+  const html = page('<div class="root"><div class="box"><p class="a">A</p>&nbsp;</div></div>');
+  const result = await normalizeHtmlSource({ htmlText: html, cssText: '.box { display: block; }' });
+  assert.ok(result.report.items.some(item => item.code === 'MIXED_CONTENT' && /box/.test(item.source)), JSON.stringify(result.report.items.map(item => item.code)));
+});
+
+test('inline elements separated by a no-break space become one Rich Text layer that keeps it', async () => {
+  const html = page('<div class="root"><div class="line"><strong class="b">Bold</strong>&nbsp;<em class="i">italic</em></div></div>');
+  const result = await normalizeHtmlSource({ htmlText: html, cssText: '.line { display: block; }' });
+  assert.match(result.html, /<div class="line"[^>]*data-taptop-kind="rich-text"/);
+  assert.deepEqual(await ownTextOf(result.html, 'line'), ['\xa0']);
+});
+
+test('a <details> item keeps a text of only a no-break space in its panel', async () => {
+  const html = page('<div class="faq"><details class="faq-item"><summary class="faq-question">Q</summary>&nbsp;</details></div>');
+  const result = await normalizeHtmlSource({ htmlText: html, cssText: '.faq { display: block; }' });
+  assert.deepEqual(await ownTextOf(result.html, 'faq-item__panel'), ['\xa0']);
+});
+
+test('a class list splits on ASCII whitespace only: a class token with a no-break space stays one token', async () => {
+  const html = page('<div class="root"><p class="a\xa0b" style="color: #111111">A</p></div>');
+  const result = await normalizeHtmlSource({ htmlText: html, cssText: '' });
+  const { parse } = await import('parse5');
+  const found = [];
+  const visit = node => { const value = (node.attrs || []).find(item => item.name === 'class')?.value; if (value && value.includes('\xa0')) found.push(value); for (const child of node.childNodes || []) visit(child); };
+  visit(parse(result.html));
+  assert.equal(found.length, 1, result.html);
+  assert.deepEqual(found[0].split(' ').slice(0, 1), ['a\xa0b']);
+  assert.match(found[0], /^a\xa0b a\xa0b-inline1$/);
+});
+
+// Embed declarations of a class rule and the source cascade (2026-10-19): the Embed stylesheet loads after every
+// class rule, so a declaration it repeats used to beat the later class rule, inline style or breakpoint rule that
+// overrode it in the source (a pill gained a border its modifier removed; an overlay's inline background lost).
+const embedRuleText = (css, selector) => css.split('\n').map(line => line.trim()).filter(line => line.startsWith(`${selector} {`));
+
+test('the Embed copy of a var() declaration skips the elements a later class rule overrides', async () => {
+  const result = await normalizeHtmlSource({
+    htmlText: page('<div class="root"><div class="card"><span class="pl">A</span><span class="pl pl--crm">B</span></div><div class="card card--b"><span class="pl">C</span></div></div>'),
+    cssText: '.card { --a: #ff0000; } .card--b { --a: #00ff00; } .pl { border: 1px solid var(--a); } .pl--crm { border: 0; }'
+  });
+  assert.deepEqual(embedRuleText(result.embedCss, '.pl'), []);
+  assert.deepEqual(embedRuleText(result.embedCss, '.pl:where(:not(.pl--crm))'), ['.pl:where(:not(.pl--crm)) { border: 1px solid var(--a); }']);
+  assert.ok(codes(result.report).includes('EMBED_CASCADE_SCOPED'));
+  assert.doesNotMatch(result.embedCss, /:where\(\.pl--crm\)/, 'border against border overrides the whole shorthand: no follower');
+});
+
+test('a shorthand var() copy overridden by the same shorthand of an inline style raises no partial warning', async () => {
+  const result = await normalizeHtmlSource({
+    htmlText: page('<div class="root"><div class="card"><a class="btn" href="#">A</a><a class="btn" href="#" style="border: 2px dashed #000000">B</a></div><div class="card card--b"><a class="btn" href="#">C</a></div></div>'),
+    cssText: '.card { --a: #ff0000; } .card--b { --a: #00ff00; } .btn { border: 1px solid var(--a); }'
+  });
+  assert.deepEqual(embedRuleText(result.embedCss, '.btn:where(:not(.btn-inline1))'), ['.btn:where(:not(.btn-inline1)) { border: 1px solid var(--a); }']);
+  assert.doesNotMatch(result.embedCss, /:where\(\.btn-inline1\)/, 'no follower for a whole override');
+});
+
+test('a breakpoint band where the copy is left out on some elements uses a Media Queries Level 3 range', async () => {
+  const result = await normalizeHtmlSource({
+    htmlText: page('<div class="root"><div class="card"><p class="t">A</p><p class="t x">B</p></div><div class="card card--b"><p class="t">C</p></div></div>'),
+    cssText: '.card { --c: #ff0000; } .card--b { --c: #00ff00; } .t { color: var(--c); } @media (max-width: 767px) { .x { color: #111111; } } @media (max-width: 479px) { .t { color: #222222; } }'
+  });
+  assert.match(result.embedCss, /@media not all and \(max-width: 767px\) \{\n {2}\.t \{ color: var\(--c\); \}\n\}/);
+  assert.match(result.embedCss, /@media \(min-width: 479\.02px\) and \(max-width: 767px\) \{\n {2}\.t:where\(:not\(\.x\)\) \{ color: var\(--c\); \}\n\}/);
+  assert.doesNotMatch(result.embedCss, /width [<>]/, 'no Media Queries Level 4 range syntax');
+});
+
+test('an inline style keeps winning over the Embed var() form of a lowered selector', async () => {
+  const result = await normalizeHtmlSource({
+    htmlText: page('<div class="board"><div class="ev"><a class="cta" href="#">x</a><div class="cta" style="background: none">y</div></div></div>'),
+    cssText: '.board { --b: #00ff00; } .ev .cta { background: var(--b); }'
+  });
+  assert.match(result.html, /class="cta cta-inline1 cta--sel"/);
+  assert.deepEqual(embedRuleText(result.embedCss, '.cta--sel'), []);
+  assert.deepEqual(embedRuleText(result.embedCss, '.cta--sel:where(:not(.cta-inline1))'), ['.cta--sel:where(:not(.cta-inline1)) { background: var(--b); }']);
+});
+
+test('the Embed copy of a var() declaration stops at the breakpoint where a class rule overrides it', async () => {
+  const result = await normalizeHtmlSource({
+    htmlText: page('<div class="root"><div class="card"><p class="t">A</p></div><div class="card card--b"><p class="t">B</p></div></div>'),
+    cssText: '.card { --c: #ff0000; } .card--b { --c: #00ff00; } .t { color: var(--c); } @media (max-width: 767px) { .t { color: #000000; } }'
+  });
+  assert.deepEqual(embedRuleText(result.embedCss, '.t'), ['.t { color: var(--c); }']);
+  assert.match(result.embedCss, /@media not all and \(max-width: 767px\) \{\n {2}\.t \{ color: var\(--c\); \}\n\}/);
+  assert.doesNotMatch(result.embedCss, /^\.t \{ color: var\(--c\); \}$/m, 'outside a media block the copy would beat the 767px class rule');
+});
+
+test('a var() with one value for every element of its class is resolved and not repeated in the Embed', async () => {
+  const resolved = await normalizeHtmlSource({
+    htmlText: page('<div class="board"><p class="t">A</p><p class="t t--muted">B</p></div>'),
+    cssText: '.board { --ink: #091e42; } .t { color: var(--ink); } .t--muted { color: #626f86; }'
+  });
+  assert.equal(rulesOf(resolved.css)['screen .t'].color, '#091e42');
+  assert.doesNotMatch(resolved.embedCss, /var\(--ink\)/);
+  assert.ok(!codes(resolved.report).includes('VARIABLE_TO_EMBED'));
+  // One element of the class sits outside the element that defines the variable: its value differs, the copy stays.
+  const outside = await normalizeHtmlSource({
+    htmlText: page('<div class="root"><div class="board"><p class="t">A</p></div><p class="t">B</p></div>'),
+    cssText: '.board { --ink: #091e42; } .t { color: var(--ink, #000000); }'
+  });
+  assert.match(outside.embedCss, /\.t \{ color: var\(--ink, #000000\); \}/);
+  // A second definition elsewhere (here inside a media query) keeps the copy too.
+  const media = await normalizeHtmlSource({
+    htmlText: page('<div class="board"><p class="t">A</p></div>'),
+    cssText: '.board { --ink: #091e42; } @media (max-width: 767px) { .board { --ink: #000000; } } .t { color: var(--ink); }'
+  });
+  assert.match(media.embedCss, /\.t \{ color: var\(--ink\); \}/);
+});
+
+test('a rule that lives wholly in the Embed writes each var() declaration once, in source order', async () => {
+  const result = await normalizeHtmlSource({
+    htmlText: page('<div class="root"><div class="card"><p class="t">A</p></div><div class="card card--b"><p class="t">B</p></div></div>'),
+    cssText: '.card { --c: #ff0000; } .card--b { --c: #0000ff; } @media (min-width: 1200px) { .t { color: #111111; color: var(--c); } }'
+  });
+  assert.match(result.embedCss, /@media \(min-width: 1200px\) \{\n {2}\.t \{ color: #111111; color: var\(--c\); \}\n\}/);
+  assert.doesNotMatch(result.embedCss, /color: #ff0000/, 'the first element\'s resolved value must not follow the var() form');
+});
+
+// Lines of the Embed in order, trimmed: `follows(css, a, b)` holds when rule a is written and b after it.
+const embedLines = css => css.split('\n').map(line => line.trim());
+const follows = (css, first, second) => {
+  const lines = embedLines(css);
+  const index = lines.indexOf(first);
+  return index > -1 && lines.indexOf(second, index + 1) > index;
+};
+
+test('a shorthand var() copy overridden in part keeps applying and the overriding longhand follows it', async () => {
+  const result = await normalizeHtmlSource({
+    htmlText: page('<div class="root"><div class="card"><a class="btn" href="#">A</a><a class="btn btn--flat" href="#">B</a></div><div class="card card--b"><a class="btn" href="#">C</a></div></div>'),
+    cssText: '.card { --a: #ff0000; } .card--b { --a: #00ff00; } .btn { border: 1px solid var(--a); } .btn--flat { border-bottom-width: 0; }'
+  });
+  assert.ok(follows(result.embedCss, '.btn { border: 1px solid var(--a); }', '.btn:where(.btn--flat) { border-bottom-width: 0; }'), result.embedCss);
+  assert.doesNotMatch(result.embedCss, /:not\(/);
+});
+
+test('an Embed-only background keeps its image when the same rule sets one part of it in the class', async () => {
+  const result = await normalizeHtmlSource({
+    htmlText: page('<div class="root"><div class="hero">A</div></div>'),
+    cssText: '.hero { background: url(https://x.test/a.jpg) no-repeat; background-size: cover; min-height: 10px; }'
+  });
+  assert.deepEqual(embedRuleText(result.embedCss, '.hero'), ['.hero { background: url(https://x.test/a.jpg) no-repeat; background-size: cover; }']);
+});
+
+test('an Embed-only background keeps its image on a modifier that changes its position', async () => {
+  const result = await normalizeHtmlSource({
+    htmlText: page('<div class="root"><div class="hero">A</div><div class="hero hero--alt">B</div></div>'),
+    cssText: '.hero { background: url(https://x.test/a.jpg) center / cover no-repeat; min-height: 10px; } .hero--alt { background-position: top; }'
+  });
+  assert.ok(follows(result.embedCss, '.hero { background: url(https://x.test/a.jpg) center / cover no-repeat; }', '.hero:where(.hero--alt) { background-position: top; }'), result.embedCss);
+  assert.doesNotMatch(result.embedCss, /:not\(/);
+});
+
+test('an animation with its delay in the same rule is written as the source has it', async () => {
+  const result = await normalizeHtmlSource({
+    htmlText: page('<div class="root"><p class="pop">A</p></div>'),
+    cssText: '.pop { animation: rise 1s ease both; animation-delay: .2s; } @keyframes rise { from { opacity: 0; } }'
+  });
+  assert.deepEqual(embedRuleText(result.embedCss, '.pop'), ['.pop { animation: rise 1s ease both; animation-delay: .2s; }']);
+});
+
+test('an animation keeps playing on a modifier that only delays it', async () => {
+  const result = await normalizeHtmlSource({
+    htmlText: page('<div class="root"><p class="pop">A</p><p class="pop pop--late">B</p></div>'),
+    cssText: '.pop { animation: rise 1s ease both; } .pop--late { animation-delay: .4s; } @keyframes rise { from { opacity: 0; } }'
+  });
+  assert.deepEqual(embedRuleText(result.embedCss, '.pop'), ['.pop { animation: rise 1s ease both; }']);
+  assert.ok(follows(result.embedCss, '.pop { animation: rise 1s ease both; }', '.pop--late { animation-delay: .4s; }'), result.embedCss);
+  assert.doesNotMatch(result.embedCss, /:not\(/);
+});
+
+test('an earlier !important declaration excludes the copy; a later normal one does not beat an !important copy', async () => {
+  const contexts = '<div class="root"><div class="card"><p class="t">A</p><p class="t u">B</p></div><div class="card card--b"><p class="t">C</p></div></div>';
+  const earlier = await normalizeHtmlSource({ htmlText: page(contexts), cssText: '.card { --c: #ff0000; } .card--b { --c: #0000ff; } .u { color: #00ff00 !important; } .t { color: var(--c); }' });
+  assert.deepEqual(embedRuleText(earlier.embedCss, '.t:where(:not(.u))'), ['.t:where(:not(.u)) { color: var(--c); }']);
+  const important = await normalizeHtmlSource({ htmlText: page(contexts), cssText: '.card { --c: #ff0000; } .card--b { --c: #0000ff; } .t { color: var(--c) !important; } .u { color: #00ff00; }' });
+  assert.deepEqual(embedRuleText(important.embedCss, '.t'), ['.t { color: var(--c); }']);
+});
+
+test('an earlier lowered selector with higher specificity excludes a later class copy', async () => {
+  const result = await normalizeHtmlSource({
+    htmlText: page('<div class="root"><div class="card"><p class="t">A</p></div><div class="card card--b"><p class="t">C</p></div><div class="w"><p class="t">D</p></div></div>'),
+    cssText: '.card { --c: #ff0000; } .card--b { --c: #0000ff; } .w .t { color: #00ff00; } .t { color: var(--c); }'
+  });
+  assert.deepEqual(embedRuleText(result.embedCss, '.t:where(:not(.t--sel))'), ['.t:where(:not(.t--sel)) { color: var(--c); }']);
+});
+
+test('a band between two breakpoints of a 991px copy uses Media Queries Level 3', async () => {
+  const result = await normalizeHtmlSource({
+    htmlText: page('<div class="root"><div class="card"><p class="t">A</p><p class="t x">B</p></div><div class="card card--b"><p class="t">C</p></div></div>'),
+    cssText: '.card { --c: #ff0000; } .card--b { --c: #0000ff; } @media (max-width: 991px) { .t { color: var(--c); } } @media (max-width: 767px) { .x { color: #111111; } } @media (max-width: 479px) { .t { color: #222222; } }'
+  });
+  assert.match(result.embedCss, /@media \(min-width: 767\.02px\) and \(max-width: 991px\) \{\n {2}\.t \{ color: var\(--c\); \}\n\}/);
+  assert.match(result.embedCss, /@media \(min-width: 479\.02px\) and \(max-width: 767px\) \{\n {2}\.t:where\(:not\(\.x\)\) \{ color: var\(--c\); \}\n\}/);
+});
+
+test('a class name with special characters is escaped in the Embed selector', async () => {
+  const result = await normalizeHtmlSource({
+    htmlText: page('<div class="root"><div class="card"><p class="t">A</p><p class="md:x t" style="color: green">B</p></div><div class="card card--b"><p class="t">C</p></div></div>'),
+    cssText: '.card { --c: #ff0000; } .card--b { --c: #0000ff; } .t { color: var(--c); }'
+  });
+  assert.match(result.html, /class="md:x t md:x-inline1[ "]/);
+  assert.deepEqual(embedRuleText(result.embedCss, '.t:where(:not(.md\\:x-inline1))'), ['.t:where(:not(.md\\:x-inline1)) { color: var(--c); }']);
+});
+
+test('custom properties are written once, and none for a class no element has', async () => {
+  const result = await normalizeHtmlSource({
+    htmlText: page('<div class="root"><div class="card"><p class="t">A</p></div><div class="card card--b"><p class="t">B</p></div></div>'),
+    cssText: '.card { --c: #ff0000; } .card--b { --c: #0000ff; } .t { color: var(--c); } .ghost { --g: 1px; margin-left: auto; animation: x 1s; }'
+  });
+  assert.equal((result.embedCss.match(/--c: #ff0000/g) || []).length, 1, result.embedCss);
+  assert.equal((result.embedCss.match(/--c: #0000ff/g) || []).length, 1, result.embedCss);
+  assert.doesNotMatch(result.embedCss, /ghost/);
+});
+
+test('an Embed-only declaration (auto side margin) skips the elements a later class rule overrides', async () => {
+  const result = await normalizeHtmlSource({
+    htmlText: page('<div class="root"><div class="a">A</div><div class="a a--left">B</div></div>'),
+    cssText: '.a { margin-left: auto; width: 100px; } .a--left { margin-left: 0; }'
+  });
+  assert.deepEqual(embedRuleText(result.embedCss, '.a'), []);
+  assert.deepEqual(embedRuleText(result.embedCss, '.a:where(:not(.a--left))'), ['.a:where(:not(.a--left)) { margin-left: auto; }']);
+});
+
+test('an inline custom property keeps winning over the class definition of the same variable in the Embed', async () => {
+  const result = await normalizeHtmlSource({
+    htmlText: page('<div class="root"><p class="dl pop">A</p><p class="dl pop" style="--dl: .8s">B</p></div>'),
+    cssText: '.dl { --dl: .6s; } .pop { animation: rise 1s ease var(--dl) both; } @keyframes rise { from { opacity: 0; } }'
+  });
+  assert.equal(embedLines(result.embedCss).filter(line => /--dl: \.6s/.test(line)).length, 1, result.embedCss);
+  assert.ok(follows(result.embedCss, '.dl { --dl: .6s; }', '.dl-inline1 { --dl: .8s; }'), result.embedCss);
+  assert.equal(embedLines(result.embedCss).filter(line => /--dl: \.8s/.test(line)).length, 1, result.embedCss);
+});
+
+// A margin shorthand with auto sides (2026-10-19): only the longhands reached MARGIN_AUTO_TO_EMBED, so
+// `margin: 0 auto` put auto side margins into the class, which Taptop stores as 0px.
+test('a margin shorthand sends its auto side margins to the Embed and keeps the other sides in the class', async () => {
+  for (const [margin, top, bottom] of [['0 auto', '0', '0'], ['10px auto 20px', '10px', '20px']]) {
+    const result = await normalizeHtmlSource({ htmlText: page('<div class="root"><div class="w">A</div></div>'), cssText: `.w { margin: ${margin}; max-width: 100px; }` });
+    const rule = rulesOf(result.css)['screen .w'];
+    assert.equal(rule['margin-top'], top, margin);
+    assert.equal(rule['margin-bottom'], bottom, margin);
+    assert.equal(rule['margin-left'], undefined, margin);
+    assert.equal(rule['margin-right'], undefined, margin);
+    assert.deepEqual(embedRuleText(result.embedCss, '.w'), ['.w { margin-right: auto; margin-left: auto; }'], margin);
+    assert.ok(codes(result.report).includes('MARGIN_AUTO_TO_EMBED'), margin);
+  }
+});
+
+test('an auto side margin from a shorthand gives way to a later class rule on its elements', async () => {
+  const result = await normalizeHtmlSource({
+    htmlText: page('<div class="root"><div class="w">A</div><div class="w w--l">B</div></div>'),
+    cssText: '.w { margin: 0 auto; max-width: 100px; } .w--l { margin-left: 0; }'
+  });
+  assert.ok(follows(result.embedCss, '.w { margin-right: auto; margin-left: auto; }', '.w:where(.w--l) { margin-left: 0; }'), result.embedCss);
+  assert.equal(rulesOf(result.css)['screen .w--l']['margin-left'], '0');
 });

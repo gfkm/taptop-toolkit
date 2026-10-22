@@ -26,7 +26,8 @@ npm run toolkit -- build --project projects/<folder> --artifact pages/home
 - Originals stay in `input/`; Figma/AI-authored HTML goes in `source/pages/` or `source/components/`.
 - Use the kit's exact class names for text, buttons and links. `NO_UI_KIT_ROLES_USED` means none were used — check for look-alike classes.
 - `UI_KIT_CLASS_MISMATCH`: the page's rule differs from the kit. Change the kit first if the design really changed; otherwise use the kit rule.
-- Repeated build with no change → `up-to-date`; nothing new is written.
+- Repeated build with no change → `up-to-date`; nothing new is written. After a Toolkit update every artifact is `stale` (`built by other Toolkit code`) and the next build writes a new pair: build every artifact again before handing anything over.
+- The target site already has its own classes (built in the Taptop editor) and the page should use them by name: register the site's stylesheet with `--external-css design-system/<site>.css` (repeatable). Those classes stay on the layers, the package carries no rules for them and lists them in `externalClasses`; the preview and comparison load the sheet. A page rule on such a class stops the build (`EXTERNAL_CLASS_REDEFINED`): put page values on a page class of the element. Give every element its own page class next to the site classes; an element with only site classes that needs page values stops the build (`EXTERNAL_ONLY_ELEMENT`). `EXTERNAL_ORDER_UNVERIFIED` asks for an editor check of that element. The site may define the Toolkit's own classes only exactly as the Toolkit does (`.toolkit-behavior { display: none; }`, reported as `TOOLKIT_CLASS_ON_SITE`); any other site rule for one the package uses stops the build (`TOOLKIT_CLASS_CONFLICT`): tell the user which site rule hides or shows the behavior Embeds. Details: `system/docs/html-normalizer.md`, "External stylesheets".
 
 ## Where the results are
 

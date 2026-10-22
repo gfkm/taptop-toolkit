@@ -26,6 +26,10 @@ function splitList(text) {
   return parts;
 }
 
+// One class (`.name`), or one class with a state Taptop stores on the class.
+const CLASS_SELECTOR = /^\.[_a-zA-Z-][_a-zA-Z0-9-]*$/;
+const STATE_SELECTOR = /^(\.[_a-zA-Z-][_a-zA-Z0-9-]*)(:hover|:focus-visible|:focus|:active)$/;
+
 const IDENT = /^-?(?:[_a-zA-Z]|\\.)(?:[_a-zA-Z0-9-]|\\.)*/;
 const unescape = value => value.replace(/\\(.)/g, '$1');
 
@@ -218,4 +222,14 @@ function specificity(steps, { idClasses = new Set() } = {}) {
   return total;
 }
 
-module.exports = { parseSelector, staticPart, selectMatching, specificity, splitList, STRUCTURAL };
+// The classes of a selector's subject (its last compound): the elements the rule styles.
+function subjectClasses(selector) {
+  const steps = parseSelector(selector);
+  if (steps && steps.length) return steps[steps.length - 1].compound.classes;
+  let text = selector;
+  for (let guard = 0; guard < 10 && /\([^()]*\)/.test(text); guard += 1) text = text.replace(/\([^()]*\)/g, '');
+  const last = text.trim().split(/\s*[>+~]\s*|\s+/).pop() || '';
+  return [...last.matchAll(/\.(-?[_a-zA-Z][_a-zA-Z0-9-]*)/g)].map(match => match[1]);
+}
+
+module.exports = { parseSelector, staticPart, selectMatching, specificity, splitList, subjectClasses, CLASS_SELECTOR, STATE_SELECTOR, STRUCTURAL };

@@ -25,6 +25,10 @@
       }
     },
     "behaviorManifest": { "$ref": "#/$defs/relativePath" },
+    "externalClasses": {
+      "description": "Classes of the target site's own (external) stylesheet that layers use. They stay on the layers by name; the compiler writes no rules, identity or sync entry for them.",
+      "type": "array", "uniqueItems": true, "items": { "type": "string", "pattern": "^-?[_a-zA-Z][_a-zA-Z0-9-]*$" }
+    },
     "breakpointMap": {
       "type": "object",
       "additionalProperties": { "enum": ["screen", "(max-width: 991px)", "(max-width: 767px)", "(max-width: 479px)"] }

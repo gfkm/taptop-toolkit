@@ -63,7 +63,7 @@ function doctorProject(projectRoot) {
     return finish(project);
   }
   for (const artifact of artifacts) {
-    for (const file of [artifact.html, ...artifact.stylesheets, ...(artifact.intake ? [artifact.intake] : [])]) {
+    for (const file of [artifact.html, ...artifact.stylesheets, ...(artifact.externalStylesheets || []), ...(artifact.intake ? [artifact.intake] : [])]) {
       if (!fs.existsSync(path.join(root, file))) add('error', 'ARTIFACT_SOURCE_MISSING', file, `${artifact.key} needs ${file}, which does not exist.`, `Restore ${file}, or register the artifact again with the correct path.`);
     }
     if (artifact.intake && fs.existsSync(path.join(root, artifact.intake))) {

@@ -3,12 +3,14 @@ const path = require('node:path');
 const { parseHtmlToIr } = require('./compiler/html-to-ir');
 const { compileIrToTaptop } = require('./compiler/ir-to-taptop');
 const { validateHtmlCompilerManifest } = require('./html-ir-contract');
-const { buildCompilerIdentityManifest, selectorUsesClass } = require('./build-compiler-identity-manifest');
+const { buildCompilerIdentityManifest, selectorUsesClass, selectorEntriesUsing, SELECTOR_COLLECTIONS } = require('./build-compiler-identity-manifest');
 const { buildImportSyncPackage } = require('./build-import-sync-package');
 const { preflightImportPackage } = require('./import-package-preflight');
 const { inside, readProjectFile, loadProject } = require('./project');
 const { embeddedAssetRecords, readLocalAsset } = require('./asset-package');
 const { buildEmbedBehaviorPackage } = require('./behavior-package');
+const { BEHAVIOR_CLASS, ownRuleText } = require('./toolkit-classes');
+const { isBlankText } = require('./html-whitespace');
 const embedFixture = require('../contracts/behaviors/fixtures/tt-embed-v1.json');
 const postcss = require('postcss');
 
@@ -34,6 +36,11 @@ function splitEmbedCss(cssText) {
 // CSS that Taptop classes cannot express (relational selectors, pseudo-elements,
 // non-Toolkit media) ships as one hidden Embed with a <style> block. It applies
 // on the published page only.
+// Whether the Embed stylesheet ships as its own Embed package: CSS that is not
+// only (ASCII, CSS) whitespace. The normalizer's Toolkit-class check uses the
+// same answer for when the package carries .toolkit-behavior.
+const shipsStylesEmbed = cssText => !isBlankText(cssText);
+
 function buildStylesPackages(manifest, cssText) {
   if (/<\/?\s*(style|script)/i.test(cssText)) throw new Error('EMBED_STYLESHEET_UNSAFE: the embed stylesheet must contain CSS only');
   return splitEmbedCss(cssText).map((part, index) => buildEmbedBehaviorPackage({
@@ -41,8 +48,31 @@ function buildStylesPackages(manifest, cssText) {
     key: `${manifest.componentKey}/styles${index ? `-part${String.fromCharCode(97 + index)}` : ''}`,
     adapter: 'taptop/embed-styles-v1',
     name: `styles-${manifest.componentKey.replace(/[^A-Za-z0-9_-]+/g, '-')}${index ? `-part${String.fromCharCode(97 + index)}` : ''}`,
-    embedCode: `<style>\n${index ? '' : '.toolkit-behavior { display: none; }\n'}${part}\n</style>`
+    embedCode: `<style>\n${index ? '' : `${ownRuleText(BEHAVIOR_CLASS)}\n`}${part}\n</style>`
   }));
+}
+
+// External classes (manifest.externalClasses) belong to the target site. A
+// layer keeps such a class by name; the package carries no rule, identity or
+// sync entry for it and lists the ones layers use in wrapper.externalClasses.
+// The normalizer never writes their rules, so a selector entry that reaches one
+// means a hand-edited or foreign manifest: refused, never silently dropped.
+function externalClassesOf(clipboardData, external) {
+  const layout = clipboardData.copiedLayout;
+  const [reached] = selectorEntriesUsing(layout, external);
+  if (reached) throw new Error(`EXTERNAL_CLASS_REDEFINED: ${reached.entry.selectorText} (${reached.collection}) restyles .${reached.name}, a class of an external stylesheet`);
+  const byId = new Map();
+  for (const collection of ['main', 'design']) {
+    for (const [id, item] of Object.entries(layout[`${collection}ClassNameCollection`]?.map || {})) byId.set(id, { name: item?.value, collection });
+  }
+  const used = new Map();
+  for (const tag of Object.values(layout.tree?.tags || {})) {
+    for (const id of tag?.classNameIds || []) {
+      const item = byId.get(id);
+      if (item && external.has(item.name)) used.set(item.name, item.collection);
+    }
+  }
+  return [...used].sort(([a], [b]) => (a < b ? -1 : a > b ? 1 : 0)).map(([name, collection]) => ({ name, collection }));
 }
 
 // `projectClassKeys` (managed builds) gives each class one project-owned stable
@@ -69,7 +99,7 @@ async function compileProject(root, manifestPath, destination, { projectClassKey
     if (['script', 'iframe', 'form', 'input', 'select', 'textarea', 'video', 'audio', 'canvas'].includes(node.tagName)) throw new Error(`UNSUPPORTED_HTML: ${node.tagName}`);
     if (node.tagName === 'style') throw new Error('INLINE_CSS: move styles into manifest stylesheets');
     const attributesByTag = { svg: (node.attrs || []).map(item => item.name), html: ['lang'], meta: ['charset', 'name', 'content'], link: ['rel', 'href'], a: ['href'], button: ['type'], img: ['src', 'width', 'height', 'alt'] };
-    const allowedAttributes = new Set(['class', 'data-taptop-key', 'data-taptop-kind', 'data-taptop-behavior', ...(attributesByTag[node.tagName] || [])]);
+    const allowedAttributes = new Set(['class', 'data-taptop-key', 'data-taptop-kind', 'data-taptop-name', 'data-taptop-behavior', ...(attributesByTag[node.tagName] || [])]);
     for (const attr of node.attrs || []) {
       if (!allowedAttributes.has(attr.name)) throw new Error(`UNSUPPORTED_ATTRIBUTE: ${attr.name}`);
     }
@@ -110,14 +140,17 @@ async function compileProject(root, manifestPath, destination, { projectClassKey
   const { clipboardData, behaviorPackages } = compileIrToTaptop({ ir, manifest, stylesheetTexts, assetKeys });
   if (manifest.embedStylesheet) {
     const embedCss = readProjectFile(root, manifest.embedStylesheet);
-    if (embedCss.trim()) behaviorPackages.unshift(...buildStylesPackages(manifest, embedCss));
+    if (shipsStylesEmbed(embedCss)) behaviorPackages.unshift(...buildStylesPackages(manifest, embedCss));
   }
-  const names = new Set(Object.values(ir.nodes).flatMap(node => node.classes));
+  const external = new Set(manifest.externalClasses || []);
+  if (external.has(manifest.rootSelector.replace(/^\./, ''))) throw new Error(`EXTERNAL_ONLY_ELEMENT: the root selector ${manifest.rootSelector} is a class of an external stylesheet; the root needs a page class`);
+  const externalClasses = external.size ? externalClassesOf(clipboardData, external) : [];
+  const names = new Set(Object.values(ir.nodes).flatMap(node => node.classes).filter(name => !external.has(name)));
   for (const item of manifest.typographyCompositions || []) names.add(item.tokenClass);
   for (const item of Object.values(clipboardData.copiedLayout.designClassNameCollection.map)) names.add(item.value);
   // A structural class may have no rules after typography composition. It stays
   // on the node but owns no styles, so it must not become a managed style entry.
-  const selectorEntries = ['main', 'design', 'cm', 'animation'].flatMap(channel => Object.values(clipboardData.copiedLayout[`${channel}SelectorCollection`].map));
+  const selectorEntries = SELECTOR_COLLECTIONS.flatMap(collection => Object.values(clipboardData.copiedLayout[collection].map));
   for (const name of names) {
     if (!selectorEntries.some(entry => selectorUsesClass(entry.selectorText, name) && Object.keys(entry.rules).length)) names.delete(name);
   }
@@ -126,6 +159,7 @@ async function compileProject(root, manifestPath, destination, { projectClassKey
   const identity = buildCompilerIdentityManifest({ clipboardData, namespace: config.namespace, componentKey: manifest.componentKey, stableKeysByClass, instance: { stableKey: `${manifest.componentKey}/instance`, rootLogicalNodeKey: ir.rootKey } });
   const wrapper = { type: 'taptop-enhancer-layer-export', version: 2, exportedAt: new Date().toISOString(), sourceUrl: '', layerName: manifest.componentKey, sourceRevision: ir.sourceRevision, clipboardData, syncPackage: buildImportSyncPackage(clipboardData, identity, { logicalNodeKeys: Object.keys(ir.nodes), sourceRevision: ir.sourceRevision }), embeddedAssets };
   if (behaviorPackages.length) wrapper.behaviorPackages = behaviorPackages;
+  if (externalClasses.length) wrapper.externalClasses = externalClasses;
   const preflight = preflightImportPackage(wrapper);
   if (!preflight.ok) {
     throw new Error(`PREFLIGHT_FAILED: ${preflight.errors.join('; ')}`);
@@ -133,4 +167,4 @@ async function compileProject(root, manifestPath, destination, { projectClassKey
   fs.writeFileSync(destination, JSON.stringify(wrapper, null, 2) + '\n', { flag: 'wx' });
   return { nodes: Object.keys(ir.nodes).length, classes: identity.classes.length, sourceRevision: ir.sourceRevision };
 }
-module.exports = { compileProject, splitEmbedCss, EMBED_CODE_LIMIT };
+module.exports = { compileProject, splitEmbedCss, shipsStylesEmbed, EMBED_CODE_LIMIT };

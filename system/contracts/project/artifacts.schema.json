@@ -18,6 +18,10 @@
           "title": { "type": "string", "pattern": "\\S" },
           "html": { "$ref": "#/$defs/projectPath" },
           "stylesheets": { "type": "array", "minItems": 1, "uniqueItems": true, "items": { "$ref": "#/$defs/projectPath" } },
+          "externalStylesheets": {
+            "description": "Stylesheets of the target site, first in the cascade. Their single-class rules make a class external: layers use it by name, the package carries no rules for it and lists it in externalClasses. The runtime also rejects a file listed in stylesheets too.",
+            "type": "array", "minItems": 1, "uniqueItems": true, "items": { "$ref": "#/$defs/projectPath" }
+          },
           "rootSelector": { "type": "string", "pattern": "^\\.[_a-zA-Z-][_a-zA-Z0-9-]*$" },
           "intake": { "$ref": "#/$defs/projectPath" },
           "dependsOn": { "type": "array", "uniqueItems": true, "items": { "type": "string" } }

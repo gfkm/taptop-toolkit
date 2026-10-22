@@ -3,6 +3,7 @@ const fs = require('node:fs');
 const os = require('node:os');
 const path = require('node:path');
 const test = require('node:test');
+const { linkOrSkip } = require('../test-support/link');
 const { spawnSync } = require('node:child_process');
 const { packageToolkit } = require('../scripts/package-toolkit');
 
@@ -15,7 +16,7 @@ test('the getting-started walkthrough runs verbatim on a fresh distribution', { 
   t.after(() => fs.rmSync(parent, { recursive: true, force: true }));
   const toolkit = path.join(parent, 'taptop-toolkit');
   packageToolkit(toolkit);
-  fs.symlinkSync(path.join(ROOT, 'node_modules'), path.join(toolkit, 'node_modules'), 'dir');
+  if (!linkOrSkip(t, path.join(ROOT, 'node_modules'), path.join(toolkit, 'node_modules'), 'dir')) return;
   const guide = fs.readFileSync(path.join(toolkit, 'system/docs/getting-started.md'), 'utf8');
   const blocks = [...guide.matchAll(/```sh\n([\s\S]*?)```/g)].map(match => match[1]);
   assert.ok(blocks.length >= 4, 'the walkthrough has its command blocks');

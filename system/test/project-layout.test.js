@@ -3,6 +3,7 @@ const fs = require('node:fs');
 const os = require('node:os');
 const path = require('node:path');
 const test = require('node:test');
+const { linkOrSkip } = require('../test-support/link');
 const { initProject, loadProject } = require('../lib/project');
 const { writeUiKit } = require('../lib/ui-kit/write');
 
@@ -47,12 +48,12 @@ test('UI-kit generator accepts the empty reserved directory and rejects a symlin
   assert.ok(fs.existsSync(path.join(root, 'source/ui-kit/ui-kit.html')));
   assert.throws(() => writeUiKit(root), /UI_KIT_EXISTS/);
   fs.rmSync(path.join(root, 'source/ui-kit'), { recursive: true });
-  fs.symlinkSync(parent, path.join(root, 'source/ui-kit'));
+  if (!linkOrSkip(t, parent, path.join(root, 'source/ui-kit'))) return;
   assert.throws(() => writeUiKit(root), /UI_KIT_EXISTS/);
   assert.equal(fs.existsSync(path.join(parent, 'ui-kit.html')), false);
   fs.rmSync(path.join(root, 'source/ui-kit'));
   fs.rmSync(path.join(root, 'source'), { recursive: true });
-  fs.symlinkSync(parent, path.join(root, 'source'));
+  if (!linkOrSkip(t, parent, path.join(root, 'source'))) return;
   assert.throws(() => writeUiKit(root), /OUTSIDE_PROJECT|UNSAFE_PROJECT_PATH/);
   assert.equal(fs.existsSync(path.join(parent, 'ui-kit.html')), false);
 });
